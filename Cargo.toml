@@ -1,0 +1,15 @@
+[package]
+name = "noor"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+ab_glyph = "0.2.23"
+harfbuzz_rs = "2.0.1"
+# harfbuzz_rs = { git = "https://github.com/harfbuzz/harfbuzz_rs.git" }
+image = { version = "0.25", default-features = false, features = [
+    "png",
+    "jpeg",
+    "rayon",
+] }
+imageproc = "0.24"
