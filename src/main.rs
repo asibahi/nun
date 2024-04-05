@@ -99,18 +99,15 @@ fn write_in_image(
         .iter()
         .zip(output.get_glyph_infos())
     {
-        let gid = info.codepoint;
-        let x_advance = position.x_advance;
-        let x_offset = position.x_offset;
-        let y_offset = position.y_offset;
+        let gl = ab_glyph::GlyphId(info.codepoint as u16).with_scale_and_position(
+            ab_scale,
+            ab_glyph::point(
+                (caret + position.x_offset) as f32 * scale_factor.horizontal,
+                ascent - (position.y_offset as f32 * scale_factor.vertical),
+            ),
+        );
 
-        let horizontal = (caret + x_offset) as f32 * scale_factor.horizontal;
-        let vertical = ascent - (y_offset as f32 * scale_factor.vertical);
-
-        let gl = ab_glyph::GlyphId(gid as u16)
-            .with_scale_and_position(ab_scale, ab_glyph::point(horizontal, vertical));
-
-        caret += x_advance;
+        caret += position.x_advance;
 
         let Some(outlined_glyph) = ab_font.outline_glyph(gl) else {
             // gl is whitespace
