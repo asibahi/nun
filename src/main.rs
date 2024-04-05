@@ -20,7 +20,7 @@ const FONT_SIZE: f32 = FACTOR as f32 * 80.0;
 const BASE_STRETCH: f32 = 50.0;
 macro_rules! my_file {
     () => {
-        "kursi"
+        "qadr"
     };
 }
 static TEXT: &str = include_str!(concat!("../lines/", my_file!(), ".txt"));
@@ -79,7 +79,7 @@ fn write_in_image(
         hb::Variation::new(noor::SPAC, spac_val),
     ]);
 
-    let buffer = hb::UnicodeBuffer::new().add_str(TEXT[start_bp..end_bp].trim());
+    let buffer = hb::UnicodeBuffer::new().add_str_item(TEXT, TEXT[start_bp..end_bp].trim());
     let output = hb::shape(&hb_font, buffer, &[]);
 
     ab_font.set_variation(noor::MSHQ, mshq_val);

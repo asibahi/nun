@@ -247,7 +247,7 @@ fn find_optimal_line_by_spac_inner(
         let test = set_slice_to_axis_value(mid).round() as u32;
 
         if Some(test) == prev_test {
-            eprintln!("Line at ({start_bp}-{end_bp}) is indetemrinate. Giving best guess.");
+            // eprintln!("Line at ({start_bp}-{end_bp}) is indetemrinate. Giving best guess.");
             return Ok(LineData {
                 spac_val: mid,
                 ..ret
