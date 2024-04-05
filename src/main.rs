@@ -70,19 +70,20 @@ fn write_in_image(
     LineData {
         start_bp,
         end_bp,
-        variation_value,
+        mshq_val,
+        spac_val,
     }: LineData,
 ) {
     hb_font.set_variations(&[
-        hb::Variation::new(noor::MSHQ, variation_value),
-        hb::Variation::new(noor::SPAC, noor::SPAC_VAL),
+        hb::Variation::new(noor::MSHQ, mshq_val),
+        hb::Variation::new(noor::SPAC, spac_val),
     ]);
 
     let buffer = hb::UnicodeBuffer::new().add_str(TEXT[start_bp..end_bp].trim());
     let output = hb::shape(&hb_font, buffer, &[]);
 
-    ab_font.set_variation(noor::SPAC, noor::SPAC_VAL);
-    ab_font.set_variation(noor::MSHQ, variation_value);
+    ab_font.set_variation(noor::MSHQ, mshq_val);
+    ab_font.set_variation(noor::SPAC, spac_val);
 
     let ab_scale = ab_font.pt_to_px_scale(FONT_SIZE).unwrap();
 
