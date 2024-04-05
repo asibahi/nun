@@ -8,15 +8,19 @@ use imageproc::drawing::Canvas as _;
 use noor::LineData;
 use std::path::Path;
 
-const MARGIN: u32 = 100;
+const FACTOR: u32 = 1;
 
-const IMG_WIDTH: u32 = 2000;
-const LINE_HEIGHT: u32 = 150;
+const MARGIN: u32 = FACTOR * 100;
 
-const BASE_STRETCH: f32 = 25.0;
+const IMG_WIDTH: u32 = FACTOR * 2000;
+const LINE_HEIGHT: u32 = FACTOR * 150;
+
+const FONT_SIZE: f32 = FACTOR as f32 * 80.0;
+
+const BASE_STRETCH: f32 = 50.0;
 macro_rules! my_file {
     () => {
-        "noor"
+        "kursi"
     };
 }
 static TEXT: &str = include_str!(concat!("../lines/", my_file!(), ".txt"));
@@ -27,7 +31,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut hb_font = hb::Font::new(hb::Face::from_bytes(&font_data, 0));
 
     let mut ab_font = ab::FontRef::try_from_slice(&font_data)?;
-    let ab_scale = ab_font.pt_to_px_scale(80.0).unwrap();
+    let ab_scale = ab_font.pt_to_px_scale(FONT_SIZE).unwrap();
 
     let ab_scaled_font = ab_font.as_scaled(ab_scale);
     let scale_factor = ab_scaled_font.scale_factor();
@@ -80,7 +84,7 @@ fn write_in_image(
     ab_font.set_variation(noor::SPAC, noor::SPAC_VAL);
     ab_font.set_variation(noor::MSHQ, variation_value);
 
-    let ab_scale = ab_font.pt_to_px_scale(80.0).unwrap();
+    let ab_scale = ab_font.pt_to_px_scale(FONT_SIZE).unwrap();
 
     let ab_scaled_font = ab_font.as_scaled(ab_scale);
     let scale_factor = ab_scaled_font.scale_factor();
