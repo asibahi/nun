@@ -1,12 +1,24 @@
 #![allow(unused)]
 
 use harfbuzz_rs as hb;
-use std::cmp::Ordering;
+use itertools::Itertools as _;
+use std::{
+    cmp::Ordering,
+    collections::{HashMap, HashSet},
+    fmt::Debug,
+    ops::Not,
+};
 
+#[derive(Clone, Copy, Debug)]
 pub struct LineData {
     pub start_bp: usize,
     pub end_bp: usize,
     pub variation_value: f32,
+}
+impl LineData {
+    pub fn cost(&self) -> usize {
+        f32::abs(self.variation_value - 50.0).powi(2).round() as usize
+    }
 }
 
 pub const MSHQ: &[u8; 4] = b"MSHQ";
@@ -14,7 +26,7 @@ pub const MSHQ_MIN: f32 = 0.0;
 pub const MSHQ_MAX: f32 = 100.0;
 
 pub const SPAC: &[u8; 4] = b"SPAC";
-pub const SPAC_VAL: f32 = -90.0;
+pub const SPAC_VAL: f32 = 0.0;
 
 #[derive(Debug)]
 pub enum LineError {
@@ -58,9 +70,9 @@ pub fn find_optimal_line(
             hb::Variation::new(SPAC, SPAC_VAL),
         ]);
 
-        let buffer = hb::UnicodeBuffer::new().add_str_item(text, slice);
+        let buffer = hb::UnicodeBuffer::new().add_str_item(text, slice.trim());
 
-        let output = hb::shape(&hb_font, buffer, &[]);
+        let output = hb::shape(hb_font, buffer, &[]);
         let width: i32 = output
             .get_glyph_positions()
             .iter()
@@ -128,4 +140,70 @@ pub fn find_optimal_line(
     }
 
     Err(LineError::Indeterminate)
+}
+
+pub fn line_break(
+    hb_font: &mut hb::Font<'_>,
+    text: &str,
+    desired_width: u32,
+    scale_factor: f32,
+) -> Result<Vec<LineData>, Box<dyn std::error::Error>> {
+    let segmenter = icu_segmenter::LineSegmenter::new_auto();
+    let bps = segmenter.segment_str(text).collect::<Vec<_>>();
+
+    let mut nodes = HashSet::new();
+    nodes.insert(0);
+
+    let mut edges: HashMap<(usize, usize), LineData> = HashMap::new();
+
+    for i in 0..bps.len() {
+        if nodes.contains(&bps[i]).not() {
+            continue;
+        }
+
+        for j in (i..bps.len()).skip(1) {
+            let i = bps[i];
+            let j = bps[j];
+            let attempt = find_optimal_line(hb_font, text, i, j, desired_width, scale_factor);
+
+            match attempt {
+                Err(LineError::TooLoose) => continue,
+                Err(LineError::TooTight) => break,
+
+                // Not sure how to deal with this for now
+                Err(LineError::Indeterminate) => {
+                    todo!("Line is indeterminate at ({i}, {j}): {}", &text[i..j])
+                }
+
+                Ok(data) => {
+                    nodes.insert(j);
+                    edges.insert((i, j), data);
+                }
+            }
+        }
+    }
+
+    let (shortest_path, _) = pathfinding::prelude::dijkstra(
+        &bps[0],
+        |i| {
+            edges
+                .iter()
+                .filter(|((ki, _), _)| ki == i)
+                .map(|((_, kj), v)| (*kj, v.cost()))
+                .collect::<Vec<_>>()
+        },
+        |p| p == bps.last().unwrap(),
+    )
+    .ok_or::<&str>("Couldn't find path")?;
+
+    let lines = shortest_path
+        .into_iter()
+        .tuple_windows()
+        .map(|key| edges[&key])
+        .inspect(|ln| {
+            dbg!(&ln);
+        })
+        .collect::<Vec<_>>();
+
+    Ok(lines)
 }

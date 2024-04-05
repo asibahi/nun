@@ -6,6 +6,7 @@ edition = "2021"
 [dependencies]
 ab_glyph = "0.2.23"
 harfbuzz_rs = "2.0.1"
+icu_segmenter = "1.4.0"
 # harfbuzz_rs = { git = "https://github.com/harfbuzz/harfbuzz_rs.git" }
 image = { version = "0.25", default-features = false, features = [
     "png",
@@ -13,3 +14,5 @@ image = { version = "0.25", default-features = false, features = [
     "rayon",
 ] }
 imageproc = "0.24"
+itertools = "0.12.1"
+pathfinding = "4.9.1"

@@ -1,9 +1,9 @@
-#![allow(unused)]
+// #![allow(unused)]
 
 use ab::VariableFont;
 use ab_glyph::{self as ab, Font as _, ScaleFont as _};
 use harfbuzz_rs as hb;
-use image::GenericImageView;
+use image::{GenericImageView, RgbaImage};
 use imageproc::drawing::Canvas as _;
 use noor::LineData;
 use std::path::Path;
@@ -11,7 +11,7 @@ use std::path::Path;
 const MARGIN: u32 = 100;
 
 const IMG_WIDTH: u32 = 2000;
-const IMG_HEIGHT: u32 = 2000;
+const LINE_HEIGHT: u32 = 150;
 
 static TEXT: &str = include_str!("../noor.txt");
 
@@ -26,33 +26,47 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let ab_scaled_font = ab_font.as_scaled(ab_scale);
     let scale_factor = ab_scaled_font.scale_factor();
 
-    let line_data = noor::find_optimal_line(
+    let lines = noor::line_break(
         &mut hb_font,
         TEXT,
-        0,
-        42,
         IMG_WIDTH - 2 * MARGIN,
         scale_factor.horizontal,
     )?;
 
-    let canvas = line_data_to_image(ab_font, hb_font, line_data);
+    let mut canvas: image::RgbaImage = image::ImageBuffer::from_pixel(
+        IMG_WIDTH,
+        lines.len() as u32 * LINE_HEIGHT + 2 * MARGIN,
+        image::Rgba([10, 10, 10, 255]),
+    );
 
-    let save_file = Path::new("fff.png");
+    for (idx, line) in lines.into_iter().enumerate() {
+        write_in_image(&mut canvas, idx, &mut ab_font, &mut hb_font, line);
+    }
+
+    // let path = format!("lines/line_{}.png", idx + 1);
+    let save_file = Path::new("lines/lines.png");
 
     canvas.save(save_file)?;
 
     Ok(())
 }
 
-fn line_data_to_image<'a>(
-    mut ab_font: ab::FontRef<'a>,
-    hb_font: hb::Owned<hb::Font<'_>>,
+fn write_in_image(
+    canvas: &mut RgbaImage,
+    line: usize,
+    ab_font: &mut ab::FontRef<'_>,
+    hb_font: &mut hb::Owned<hb::Font<'_>>,
     LineData {
         start_bp,
         end_bp,
         variation_value,
     }: LineData,
-) -> image::RgbaImage {
+) {
+    hb_font.set_variations(&[
+        hb::Variation::new(noor::MSHQ, variation_value),
+        hb::Variation::new(noor::SPAC, noor::SPAC_VAL),
+    ]);
+
     let buffer = hb::UnicodeBuffer::new().add_str(TEXT[start_bp..end_bp].trim());
     let output = hb::shape(&hb_font, buffer, &[]);
 
@@ -65,9 +79,6 @@ fn line_data_to_image<'a>(
     let scale_factor = ab_scaled_font.scale_factor();
 
     let ascent = ab_scaled_font.ascent();
-
-    let mut canvas: image::RgbaImage =
-        image::ImageBuffer::from_pixel(IMG_WIDTH, IMG_HEIGHT, image::Rgba([255; 4]));
 
     let mut caret = 0;
 
@@ -98,15 +109,14 @@ fn line_data_to_image<'a>(
 
         outlined_glyph.draw(|px, py, pv| {
             let px = px + bb.min.x as u32 + MARGIN;
-            let py = py + bb.min.y as u32 + MARGIN;
+            let py = py + bb.min.y as u32 + MARGIN + line as u32 * LINE_HEIGHT;
 
             if canvas.in_bounds(px, py) {
                 let pixel = canvas.get_pixel(px, py).to_owned();
-                let color = image::Rgba([0, 0, 0, 255]);
+                let color = image::Rgba([255; 4]);
                 let weighted_color = imageproc::pixelops::interpolate(color, pixel, pv);
                 canvas.draw_pixel(px, py, weighted_color);
             }
         });
     }
-    canvas
 }
