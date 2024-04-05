@@ -13,7 +13,12 @@ const MARGIN: u32 = 100;
 const IMG_WIDTH: u32 = 2000;
 const LINE_HEIGHT: u32 = 150;
 
-static TEXT: &str = include_str!("../noor.txt");
+macro_rules! my_file {
+    () => {
+        "kursi"
+    };
+}
+static TEXT: &str = include_str!(concat!("../lines/", my_file!(), ".txt"));
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let font_data = std::fs::read("fonts/Raqq.ttf")?;
@@ -44,7 +49,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // let path = format!("lines/line_{}.png", idx + 1);
-    let save_file = Path::new("lines/lines.png");
+    let save_file = Path::new(concat!("lines/", my_file!(), ".png"));
 
     canvas.save(save_file)?;
 
