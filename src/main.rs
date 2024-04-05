@@ -13,9 +13,10 @@ const MARGIN: u32 = 100;
 const IMG_WIDTH: u32 = 2000;
 const LINE_HEIGHT: u32 = 150;
 
+const BASE_STRETCH: f32 = 25.0;
 macro_rules! my_file {
     () => {
-        "kursi"
+        "noor"
     };
 }
 static TEXT: &str = include_str!(concat!("../lines/", my_file!(), ".txt"));
@@ -36,6 +37,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         TEXT,
         IMG_WIDTH - 2 * MARGIN,
         scale_factor.horizontal,
+        BASE_STRETCH,
     )?;
 
     let mut canvas: image::RgbaImage = image::ImageBuffer::from_pixel(
@@ -48,8 +50,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         write_in_image(&mut canvas, idx, &mut ab_font, &mut hb_font, line);
     }
 
-    // let path = format!("lines/line_{}.png", idx + 1);
-    let save_file = Path::new(concat!("lines/", my_file!(), ".png"));
+    let path = format!("lines/{}_{:.0}.png", my_file!(), BASE_STRETCH);
+    let save_file = Path::new(&path);
 
     canvas.save(save_file)?;
 

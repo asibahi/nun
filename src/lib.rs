@@ -1,5 +1,3 @@
-#![allow(unused)]
-
 use harfbuzz_rs as hb;
 use itertools::Itertools as _;
 use std::{
@@ -16,8 +14,8 @@ pub struct LineData {
     pub variation_value: f32,
 }
 impl LineData {
-    pub fn cost(&self) -> usize {
-        f32::abs(self.variation_value - 50.0).powi(2).round() as usize
+    pub fn cost(&self, base: f32) -> usize {
+        f32::abs(self.variation_value - base).powi(2).round() as usize
     }
 }
 
@@ -147,6 +145,7 @@ pub fn line_break(
     text: &str,
     desired_width: u32,
     scale_factor: f32,
+    base_stretch: f32,
 ) -> Result<Vec<LineData>, Box<dyn std::error::Error>> {
     let segmenter = icu_segmenter::LineSegmenter::new_auto();
     let bps = segmenter.segment_str(text).collect::<Vec<_>>();
@@ -189,7 +188,7 @@ pub fn line_break(
             edges
                 .iter()
                 .filter(|((ki, _), _)| ki == i)
-                .map(|((_, kj), v)| (*kj, v.cost()))
+                .map(|((_, kj), v)| (*kj, v.cost(base_stretch)))
                 .collect::<Vec<_>>()
         },
         |p| p == bps.last().unwrap(),
