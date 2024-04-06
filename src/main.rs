@@ -8,7 +8,7 @@ use imageproc::drawing::Canvas as _;
 use noor::LineData;
 use std::path::Path;
 
-const FACTOR: u32 = 1;
+const FACTOR: u32 = 3;
 
 const MARGIN: u32 = FACTOR * 100;
 
@@ -20,10 +20,13 @@ const FONT_SIZE: f32 = FACTOR as f32 * 80.0;
 const BASE_STRETCH: f32 = 50.0;
 macro_rules! my_file {
     () => {
-        "qadr"
+        "noor"
     };
 }
 static TEXT: &str = include_str!(concat!("../lines/", my_file!(), ".txt"));
+
+const BKG_COLOR: image::Rgba<u8> = image::Rgba([0x09, 0x2B, 0x4C, 0xFF]);
+const TXT_COLOR: image::Rgba<u8> = image::Rgba([0xBC, 0x87, 0x22, 0xFF]);
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let font_data = std::fs::read("fonts/Raqq.ttf")?;
@@ -44,20 +47,25 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         BASE_STRETCH,
     )?;
 
-    let mut canvas: image::RgbaImage = image::ImageBuffer::from_pixel(
+    let mut top: image::RgbaImage = image::ImageBuffer::from_pixel(
         IMG_WIDTH,
         lines.len() as u32 * LINE_HEIGHT + 2 * MARGIN,
-        image::Rgba([10, 10, 10, 255]),
+        BKG_COLOR,
     );
 
     for (idx, line) in lines.into_iter().enumerate() {
-        write_in_image(&mut canvas, idx, &mut ab_font, &mut hb_font, line);
+        write_in_image(&mut top, idx, &mut ab_font, &mut hb_font, line);
     }
 
     let path = format!("lines/{}_{:.0}.png", my_file!(), BASE_STRETCH);
     let save_file = Path::new(&path);
 
-    canvas.save(save_file)?;
+    let mut bottom: image::RgbaImage =
+        image::ImageBuffer::from_pixel(top.width(), top.height(), TXT_COLOR);
+
+    image::imageops::overlay(&mut bottom, &top, 0, 0);
+
+    bottom.save(save_file)?;
 
     Ok(())
 }
@@ -122,7 +130,8 @@ fn write_in_image(
 
             if canvas.in_bounds(px, py) {
                 let pixel = canvas.get_pixel(px, py).to_owned();
-                let color = image::Rgba([255; 4]);
+                let color = image::Rgba([0; 4]);
+
                 let weighted_color = imageproc::pixelops::interpolate(color, pixel, pv);
                 canvas.draw_pixel(px, py, weighted_color);
             }
