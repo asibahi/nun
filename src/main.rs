@@ -1,9 +1,6 @@
-// #![allow(unused)]
-
-use ab::VariableFont;
-use ab_glyph::{self as ab, Font as _, ScaleFont as _};
+use ab_glyph::{self as ab, Font as _, ScaleFont as _, VariableFont as _};
 use harfbuzz_rs as hb;
-use image::{GenericImageView, RgbaImage};
+use image::{GenericImageView as _, RgbaImage};
 use imageproc::drawing::Canvas as _;
 use noor::LineData;
 use std::path::Path;
@@ -107,9 +104,9 @@ fn write_in_image(
         .iter()
         .zip(output.get_glyph_infos())
     {
-        let gl = ab_glyph::GlyphId(info.codepoint as u16).with_scale_and_position(
+        let gl = ab::GlyphId(info.codepoint as u16).with_scale_and_position(
             ab_scale,
-            ab_glyph::point(
+            ab::point(
                 (caret + position.x_offset) as f32 * scale_factor.horizontal,
                 ascent - (position.y_offset as f32 * scale_factor.vertical),
             ),
