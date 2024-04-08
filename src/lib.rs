@@ -278,8 +278,6 @@ pub fn line_break(
     scale_factor: f32,
     base_stretch: f32,
 ) -> Result<Vec<LineData>, PageError> {
-    let text = text.trim();
-
     let segmenter = icu_segmenter::LineSegmenter::new_auto();
     let bps = segmenter.segment_str(text).collect::<Vec<_>>();
 

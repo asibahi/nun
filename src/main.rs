@@ -100,7 +100,14 @@ fn write_in_image(
         hb::Variation::new(noor::SPAC, spac_val),
     ]);
 
-    let hb_buffer = hb::UnicodeBuffer::new().add_str_item(TEXT, &TEXT[start_bp..end_bp]);
+    // working around a weird bug if I trim the hb_buffer
+    let slice = if line == last_line {
+        TEXT[start_bp..end_bp].trim()
+    } else {
+        &TEXT[start_bp..end_bp]
+    };
+
+    let hb_buffer = hb::UnicodeBuffer::new().add_str_item(TEXT, slice);
     let hb_output = hb::shape(&hb_font, hb_buffer, &[]);
 
     ab_font.set_variation(noor::MSHQ, mshq_val);
