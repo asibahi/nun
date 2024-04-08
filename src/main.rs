@@ -162,14 +162,12 @@ fn write_in_image(
         if let Some(colored_glyph) = ab_font
             .glyph_svg_image(ab::GlyphId(info.codepoint as u16))
             .and_then(|svg| {
-                usvg::Tree::from_data(
+                let tree = usvg::Tree::from_data(
                     svg.data,
                     &usvg::Options::default(),
                     &usvg::fontdb::Database::new(),
                 )
-                .ok()
-            })
-            .and_then(|tree| {
+                .ok()?;
                 let node = tree.node_by_id(&format!("glyph{}", info.codepoint))?;
                 let size = node.abs_layer_bounding_box()?;
                 let transform = usvg::Transform::from_scale(
