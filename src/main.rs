@@ -15,7 +15,7 @@ const LINE_HEIGHT: u32 = FACTOR * 150;
 
 const FONT_SIZE: f32 = FACTOR as f32 * 80.0;
 
-const BASE_STRETCH: f32 = 51.0;
+const BASE_STRETCH: f32 = 35.0;
 macro_rules! my_file {
     () => {
         "ikhlas"
@@ -23,8 +23,8 @@ macro_rules! my_file {
 }
 static TEXT: &str = include_str!(concat!("../lines/", my_file!(), ".txt"));
 
-const BKG_COLOR: image::Rgba<u8> = image::Rgba([0x0A, 0x0A, 0x0A, 0xFF]);
-const TXT_COLOR: image::Rgba<u8> = image::Rgba([0xFF; 4]);
+const TXT_COLOR: image::Rgba<u8> = image::Rgba([0x0A, 0x0A, 0x0A, 0xFF]);
+const BKG_COLOR: image::Rgba<u8> = image::Rgba([0xFF; 4]);
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let font_data = std::fs::read("fonts/Raqq.ttf")?;
@@ -104,6 +104,8 @@ fn write_in_image(
 
     let mut caret = 0;
 
+    let mut colored_glyphs = vec![];
+
     for (position, info) in output
         .get_glyph_positions()
         .iter()
@@ -167,12 +169,7 @@ fn write_in_image(
                 RgbaImage::from_raw(size.width(), size.height(), pixmap.data().to_vec())
             })
         {
-            image::imageops::overlay(
-                canvas,
-                &colored_glyph,
-                (bb.min.x as u32 + MARGIN).into(),
-                (bb.min.y as u32 + MARGIN + line as u32 * LINE_HEIGHT).into(),
-            );
+            colored_glyphs.push((bb, colored_glyph))
         } else {
             outlined_glyph.draw(|px, py, pv| {
                 let px = px + bb.min.x as u32 + MARGIN;
@@ -187,5 +184,14 @@ fn write_in_image(
                 }
             });
         }
+    }
+
+    for (bb, colored_glyph) in colored_glyphs {
+        image::imageops::overlay(
+            canvas,
+            &colored_glyph,
+            (bb.min.x as u32 + MARGIN).into(),
+            (bb.min.y as u32 + MARGIN + line as u32 * LINE_HEIGHT).into(),
+        );
     }
 }
