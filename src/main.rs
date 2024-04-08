@@ -15,10 +15,10 @@ const LINE_HEIGHT: u32 = FACTOR * 150;
 
 const FONT_SIZE: f32 = FACTOR as f32 * 80.0;
 
-const BASE_STRETCH: f32 = 35.0;
+const BASE_STRETCH: f32 = 51.0;
 macro_rules! my_file {
     () => {
-        "ikhlas"
+        "noor"
     };
 }
 static TEXT: &str = include_str!(concat!("../lines/", my_file!(), ".txt"));
@@ -48,14 +48,24 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         BASE_STRETCH,
     )?;
 
+    let line_count = lines.len();
+
     let mut top: image::RgbaImage = image::ImageBuffer::from_pixel(
         IMG_WIDTH,
-        lines.len() as u32 * LINE_HEIGHT + 2 * MARGIN,
+        line_count as u32 * LINE_HEIGHT + 2 * MARGIN,
         BKG_COLOR,
     );
 
     for (idx, line) in lines.into_iter().enumerate() {
-        write_in_image(&mut top, idx, &mut ab_font, &mut hb_font, &ttfp_font, line);
+        write_in_image(
+            &mut top,
+            idx,
+            line_count - 1,
+            &mut ab_font,
+            &mut hb_font,
+            &ttfp_font,
+            line,
+        );
     }
 
     let path = format!("lines/{}_{:.0}.png", my_file!(), BASE_STRETCH);
@@ -74,6 +84,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 fn write_in_image(
     canvas: &mut RgbaImage,
     line: usize,
+    last_line: usize,
     ab_font: &mut ab::FontRef<'_>,
     hb_font: &mut hb::Owned<hb::Font<'_>>,
     ttfp_font: &ttfp::Face<'_>,
@@ -89,8 +100,8 @@ fn write_in_image(
         hb::Variation::new(noor::SPAC, spac_val),
     ]);
 
-    let buffer = hb::UnicodeBuffer::new().add_str_item(TEXT, TEXT[start_bp..end_bp].trim());
-    let output = hb::shape(&hb_font, buffer, &[]);
+    let hb_buffer = hb::UnicodeBuffer::new().add_str_item(TEXT, &TEXT[start_bp..end_bp]);
+    let hb_output = hb::shape(&hb_font, hb_buffer, &[]);
 
     ab_font.set_variation(noor::MSHQ, mshq_val);
     ab_font.set_variation(noor::SPAC, spac_val);
@@ -100,16 +111,23 @@ fn write_in_image(
     let ab_scaled_font = ab_font.as_scaled(ab_scale);
     let scale_factor = ab_scaled_font.scale_factor();
 
+    // working around a weird bug if I trim the hb_buffer
+    let visual_trim = if line == last_line {
+        0
+    } else {
+        (hb_output.get_glyph_positions()[0].x_advance as f32 * scale_factor.horizontal) as u32
+    };
+
     let ascent = ab_scaled_font.ascent();
 
     let mut caret = 0;
 
     let mut colored_glyphs = vec![];
 
-    for (position, info) in output
+    for (position, info) in hb_output
         .get_glyph_positions()
         .iter()
-        .zip(output.get_glyph_infos())
+        .zip(hb_output.get_glyph_infos())
     {
         let gl = ab::GlyphId(info.codepoint as u16).with_scale_and_position(
             ab_scale,
@@ -127,6 +145,8 @@ fn write_in_image(
         };
 
         let bb = outlined_glyph.px_bounds();
+        let bbx = bb.min.x as u32 + MARGIN - visual_trim;
+        let bby = bb.min.y as u32 + MARGIN + line as u32 * LINE_HEIGHT;
 
         if ttfp_font.is_color_glyph(ttfp::GlyphId(info.codepoint as u16)) {
             // Code doesn't reach here. Does Raqq have no colr table?
@@ -169,11 +189,11 @@ fn write_in_image(
                 RgbaImage::from_raw(size.width(), size.height(), pixmap.data().to_vec())
             })
         {
-            colored_glyphs.push((bb, colored_glyph))
+            colored_glyphs.push((bbx, bby, colored_glyph))
         } else {
             outlined_glyph.draw(|px, py, pv| {
-                let px = px + bb.min.x as u32 + MARGIN;
-                let py = py + bb.min.y as u32 + MARGIN + line as u32 * LINE_HEIGHT;
+                let px = px + bbx;
+                let py = py + bby;
 
                 if canvas.in_bounds(px, py) {
                     let pixel = canvas.get_pixel(px, py).to_owned();
@@ -186,12 +206,7 @@ fn write_in_image(
         }
     }
 
-    for (bb, colored_glyph) in colored_glyphs {
-        image::imageops::overlay(
-            canvas,
-            &colored_glyph,
-            (bb.min.x as u32 + MARGIN).into(),
-            (bb.min.y as u32 + MARGIN + line as u32 * LINE_HEIGHT).into(),
-        );
+    for (bbx, bby, colored_glyph) in colored_glyphs {
+        image::imageops::overlay(canvas, &colored_glyph, bbx.into(), bby.into());
     }
 }
