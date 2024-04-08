@@ -18,7 +18,7 @@ const FONT_SIZE: f32 = FACTOR as f32 * 80.0;
 const BASE_STRETCH: f32 = 51.0;
 macro_rules! my_file {
     () => {
-        "noor"
+        "ikhlas"
     };
 }
 static TEXT: &str = include_str!(concat!("../lines/", my_file!(), ".txt"));
@@ -127,6 +127,8 @@ fn write_in_image(
         let bb = outlined_glyph.px_bounds();
 
         if ttfp_font.is_color_glyph(ttfp::GlyphId(info.codepoint as u16)) {
+            // Code doesn't reach here. Does Raqq have no colr table?
+
             let mut painter = noor::outliner::GlyphPainter {
                 face: ttfp_font,
                 outlined_glyph,
@@ -139,7 +141,7 @@ fn write_in_image(
             };
 
             ttfp_font.paint_color_glyph(ttfp::GlyphId(info.codepoint as u16), 0, &mut painter);
-        } else if let Some(tree) = ttfp_font
+        } else if let Some(colored_glyph) = ttfp_font
             .glyph_svg_image(ttfp::GlyphId(info.codepoint as u16))
             .and_then(|svg| {
                 resvg::usvg::Tree::from_data(
@@ -149,34 +151,28 @@ fn write_in_image(
                 )
                 .ok()
             })
+            .and_then(|tree| {
+                let node = tree.node_by_id(&format!("glyph{}", info.codepoint))?;
+                let size = node.abs_layer_bounding_box()?;
+                let transform = resvg::usvg::Transform::from_scale(
+                    bb.width() / size.width(),
+                    bb.height() / size.height(),
+                );
+
+                let size = size.to_int_rect();
+                let mut pixmap = resvg::tiny_skia::Pixmap::new(size.width(), size.height())?;
+
+                resvg::render_node(node, transform, &mut pixmap.as_mut());
+
+                RgbaImage::from_raw(size.width(), size.height(), pixmap.data().to_vec())
+            })
         {
-            let size = tree.size().to_int_size();
-            let mut pixmap = resvg::tiny_skia::Pixmap::new(size.width(), size.height()).unwrap();
-
-            resvg::render(
-                &tree,
-                resvg::tiny_skia::Transform::from_bbox(
-                   resvg::tiny_skia:: NonZeroRect::from_ltrb(bb.min.x, bb.min.y, bb.max.x, bb.max.y)
-                        .expect("Surely this should word"),
-                ),
-                &mut pixmap.as_mut(),
+            image::imageops::overlay(
+                canvas,
+                &colored_glyph,
+                (bb.min.x as u32 + MARGIN).into(),
+                (bb.min.y as u32 + MARGIN + line as u32 * LINE_HEIGHT).into(),
             );
-
-            _ = pixmap.save_png(format!("{}.png", info.codepoint));
-
-            // let pixmap = pixmap.encode_png().unwrap();
-            // let png =
-            //     image::load_from_memory_with_format(&pixmap, image::ImageFormat::Png).unwrap();
-
-            // _ = png.save(format!("{}.png", info.codepoint));
-
-            // _ = canvas.copy_from(
-            //     &png,
-            //     bb.min.x as u32 + MARGIN,
-            //     bb.min.y as u32 + MARGIN + line as u32 * LINE_HEIGHT,
-            // );
-
-            dbg!("here");
         } else {
             outlined_glyph.draw(|px, py, pv| {
                 let px = px + bb.min.x as u32 + MARGIN;
