@@ -15,7 +15,7 @@ const LINE_HEIGHT: u32 = FACTOR * 150;
 
 const FONT_SIZE: f32 = FACTOR as f32 * 80.0;
 
-const BASE_STRETCH: f32 = 51.0;
+const BASE_STRETCH: f32 = 50.0;
 macro_rules! my_file {
     () => {
         "noor"
@@ -23,8 +23,17 @@ macro_rules! my_file {
 }
 static TEXT: &str = include_str!(concat!("../lines/", my_file!(), ".txt"));
 
-const TXT_COLOR: image::Rgba<u8> = image::Rgba([0x0A, 0x0A, 0x0A, 0xFF]);
-const BKG_COLOR: image::Rgba<u8> = image::Rgba([0xFF; 4]);
+const _WHITE: [u8; 4] = [0xFF; 4];
+const _BLACK: [u8; 4] = [0x0A, 0x0A, 0x0A, 0xFF];
+
+const _OFF_WHITE: [u8; 4] = [0xFF, 0xFF, 0xF2, 0xFF];
+const _OFF_BLACK: [u8; 4] = [0x20, 0x20, 0x20, 0xFF];
+
+const _GOLD_ORNG: [u8; 4] = [0xB4, 0x89, 0x39, 0xFF];
+const _NAVY_BLUE: [u8; 4] = [0x13, 0x2A, 0x4A, 0xFF];
+
+const TXT_COLOR: image::Rgba<u8> = image::Rgba(_BLACK);
+const BKG_COLOR: image::Rgba<u8> = image::Rgba(_OFF_WHITE);
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let font_data = std::fs::read("fonts/Raqq.ttf")?;
