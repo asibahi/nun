@@ -3,9 +3,10 @@ use harfbuzz_rs as hb;
 use image::{GenericImageView as _, RgbaImage};
 use imageproc::drawing::Canvas as _;
 use noor::LineData;
+use owned_ttf_parser as ttfp;
 use std::path::Path;
 
-const FACTOR: u32 = 3;
+const FACTOR: u32 = 1;
 
 const MARGIN: u32 = FACTOR * 100;
 
@@ -14,7 +15,7 @@ const LINE_HEIGHT: u32 = FACTOR * 150;
 
 const FONT_SIZE: f32 = FACTOR as f32 * 80.0;
 
-const BASE_STRETCH: f32 = 50.0;
+const BASE_STRETCH: f32 = 51.0;
 macro_rules! my_file {
     () => {
         "noor"
@@ -22,11 +23,14 @@ macro_rules! my_file {
 }
 static TEXT: &str = include_str!(concat!("../lines/", my_file!(), ".txt"));
 
-const BKG_COLOR: image::Rgba<u8> = image::Rgba([0x09, 0x2B, 0x4C, 0xFF]);
-const TXT_COLOR: image::Rgba<u8> = image::Rgba([0xBC, 0x87, 0x22, 0xFF]);
+const BKG_COLOR: image::Rgba<u8> = image::Rgba([0x0A, 0x0A, 0x0A, 0xFF]);
+const TXT_COLOR: image::Rgba<u8> = image::Rgba([0xFF; 4]);
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let font_data = std::fs::read("fonts/Raqq.ttf")?;
+
+    // the pinnacle of Efficiency, parsing the same font 3 times.
+    let ttfp_font = ttfp::Face::parse(&font_data, 0)?;
 
     let mut hb_font = hb::Font::new(hb::Face::from_bytes(&font_data, 0));
 
@@ -51,7 +55,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     for (idx, line) in lines.into_iter().enumerate() {
-        write_in_image(&mut top, idx, &mut ab_font, &mut hb_font, line);
+        write_in_image(&mut top, idx, &mut ab_font, &mut hb_font, &ttfp_font, line);
     }
 
     let path = format!("lines/{}_{:.0}.png", my_file!(), BASE_STRETCH);
@@ -72,6 +76,7 @@ fn write_in_image(
     line: usize,
     ab_font: &mut ab::FontRef<'_>,
     hb_font: &mut hb::Owned<hb::Font<'_>>,
+    ttfp_font: &ttfp::Face<'_>,
     LineData {
         start_bp,
         end_bp,
@@ -121,17 +126,34 @@ fn write_in_image(
 
         let bb = outlined_glyph.px_bounds();
 
-        outlined_glyph.draw(|px, py, pv| {
-            let px = px + bb.min.x as u32 + MARGIN;
-            let py = py + bb.min.y as u32 + MARGIN + line as u32 * LINE_HEIGHT;
+        if ttfp_font.tables().colr.is_some()
+            && ttfp_font.is_color_glyph(ttfp::GlyphId(info.codepoint as u16))
+        {
+            let mut painter = noor::outliner::GlyphPainter {
+                face: ttfp_font,
+                outlined_glyph,
+                scale_factor,
+                outline: vec![],
+                canvas,
+                margin: MARGIN,
+                line,
+                line_height: LINE_HEIGHT,
+            };
 
-            if canvas.in_bounds(px, py) {
-                let pixel = canvas.get_pixel(px, py).to_owned();
-                let color = image::Rgba([0; 4]);
+            ttfp_font.paint_color_glyph(ttfp::GlyphId(info.codepoint as u16), 0, &mut painter);
+        } else {
+            outlined_glyph.draw(|px, py, pv| {
+                let px = px + bb.min.x as u32 + MARGIN;
+                let py = py + bb.min.y as u32 + MARGIN + line as u32 * LINE_HEIGHT;
 
-                let weighted_color = imageproc::pixelops::interpolate(color, pixel, pv);
-                canvas.draw_pixel(px, py, weighted_color);
-            }
-        });
+                if canvas.in_bounds(px, py) {
+                    let pixel = canvas.get_pixel(px, py).to_owned();
+                    let color = image::Rgba([0; 4]);
+
+                    let weighted_color = imageproc::pixelops::interpolate(color, pixel, pv);
+                    canvas.draw_pixel(px, py, weighted_color);
+                }
+            });
+        }
     }
 }

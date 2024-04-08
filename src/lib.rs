@@ -7,6 +7,8 @@ use std::{
     ops::Not,
 };
 
+pub mod outliner;
+
 pub const MSHQ: &[u8; 4] = b"MSHQ";
 const MSHQ_MIN: f32 = 0.0;
 const MSHQ_MAX: f32 = 100.0;
