@@ -126,9 +126,7 @@ fn write_in_image(
 
         let bb = outlined_glyph.px_bounds();
 
-        if ttfp_font.tables().colr.is_some()
-            && ttfp_font.is_color_glyph(ttfp::GlyphId(info.codepoint as u16))
-        {
+        if ttfp_font.is_color_glyph(ttfp::GlyphId(info.codepoint as u16)) {
             let mut painter = noor::outliner::GlyphPainter {
                 face: ttfp_font,
                 outlined_glyph,
@@ -141,6 +139,44 @@ fn write_in_image(
             };
 
             ttfp_font.paint_color_glyph(ttfp::GlyphId(info.codepoint as u16), 0, &mut painter);
+        } else if let Some(tree) = ttfp_font
+            .glyph_svg_image(ttfp::GlyphId(info.codepoint as u16))
+            .and_then(|svg| {
+                resvg::usvg::Tree::from_data(
+                    svg.data,
+                    &resvg::usvg::Options::default(),
+                    &resvg::usvg::fontdb::Database::new(),
+                )
+                .ok()
+            })
+        {
+            let size = tree.size().to_int_size();
+            let mut pixmap = resvg::tiny_skia::Pixmap::new(size.width(), size.height()).unwrap();
+
+            resvg::render(
+                &tree,
+                resvg::tiny_skia::Transform::from_bbox(
+                   resvg::tiny_skia:: NonZeroRect::from_ltrb(bb.min.x, bb.min.y, bb.max.x, bb.max.y)
+                        .expect("Surely this should word"),
+                ),
+                &mut pixmap.as_mut(),
+            );
+
+            _ = pixmap.save_png(format!("{}.png", info.codepoint));
+
+            // let pixmap = pixmap.encode_png().unwrap();
+            // let png =
+            //     image::load_from_memory_with_format(&pixmap, image::ImageFormat::Png).unwrap();
+
+            // _ = png.save(format!("{}.png", info.codepoint));
+
+            // _ = canvas.copy_from(
+            //     &png,
+            //     bb.min.x as u32 + MARGIN,
+            //     bb.min.y as u32 + MARGIN + line as u32 * LINE_HEIGHT,
+            // );
+
+            dbg!("here");
         } else {
             outlined_glyph.draw(|px, py, pv| {
                 let px = px + bb.min.x as u32 + MARGIN;
