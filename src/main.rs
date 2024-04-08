@@ -3,7 +3,7 @@ use harfbuzz_rs as hb;
 use image::{GenericImageView as _, RgbaImage};
 use imageproc::drawing::Canvas as _;
 use noor::LineData;
-use owned_ttf_parser as ttfp;
+use resvg::{tiny_skia, usvg};
 use std::path::Path;
 
 const FACTOR: u32 = 1;
@@ -38,9 +38,6 @@ const BKG_COLOR: image::Rgba<u8> = image::Rgba(_OFF_WHITE);
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let font_data = std::fs::read("fonts/Raqq.ttf")?;
 
-    // the pinnacle of Efficiency, parsing the same font 3 times.
-    let ttfp_font = ttfp::Face::parse(&font_data, 0)?;
-
     let mut hb_font = hb::Font::new(hb::Face::from_bytes(&font_data, 0));
 
     let mut ab_font = ab::FontRef::try_from_slice(&font_data)?;
@@ -72,7 +69,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             line_count - 1,
             &mut ab_font,
             &mut hb_font,
-            &ttfp_font,
             line,
         );
     }
@@ -96,7 +92,6 @@ fn write_in_image(
     last_line: usize,
     ab_font: &mut ab::FontRef<'_>,
     hb_font: &mut hb::Owned<hb::Font<'_>>,
-    ttfp_font: &ttfp::Face<'_>,
     LineData {
         start_bp,
         end_bp,
@@ -164,29 +159,28 @@ fn write_in_image(
         let bbx = bb.min.x as u32 + MARGIN - visual_trim;
         let bby = bb.min.y as u32 + MARGIN + line as u32 * LINE_HEIGHT;
 
-        if let Some(colored_glyph) = ttfp_font
-            .glyph_svg_image(ttfp::GlyphId(info.codepoint as u16))
+        if let Some(colored_glyph) = ab_font
+            .glyph_svg_image(ab::GlyphId(info.codepoint as u16))
             .and_then(|svg| {
-                resvg::usvg::Tree::from_data(
+                usvg::Tree::from_data(
                     svg.data,
-                    &resvg::usvg::Options::default(),
-                    &resvg::usvg::fontdb::Database::new(),
+                    &usvg::Options::default(),
+                    &usvg::fontdb::Database::new(),
                 )
                 .ok()
             })
             .and_then(|tree| {
                 let node = tree.node_by_id(&format!("glyph{}", info.codepoint))?;
                 let size = node.abs_layer_bounding_box()?;
-                let transform = resvg::usvg::Transform::from_scale(
+                let transform = usvg::Transform::from_scale(
                     bb.width() / size.width(),
                     bb.height() / size.height(),
                 );
 
                 let size = size.to_int_rect();
-                let mut pixmap = resvg::tiny_skia::Pixmap::new(size.width(), size.height())?;
+                let mut pixmap = tiny_skia::Pixmap::new(size.width(), size.height())?;
 
                 resvg::render_node(node, transform, &mut pixmap.as_mut());
-
                 RgbaImage::from_raw(size.width(), size.height(), pixmap.data().to_vec())
             })
         {

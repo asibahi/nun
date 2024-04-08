@@ -8,7 +8,16 @@ version = "0.2.24"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8e08104bebc65a46f8bc7aa733d39ea6874bfa7156f41a46b805785e3af1587d"
 dependencies = [
- "ab_glyph_rasterizer",
+ "ab_glyph_rasterizer 0.1.8 (registry+https://github.com/rust-lang/crates.io-index)",
+ "owned_ttf_parser",
+]
+
+[[package]]
+name = "ab_glyph"
+version = "0.2.24"
+source = "git+https://github.com/asibahi/ab-glyph.git#dcf967074f970840b72bc2262821d13ceea87de2"
+dependencies = [
+ "ab_glyph_rasterizer 0.1.8 (git+https://github.com/asibahi/ab-glyph.git)",
  "owned_ttf_parser",
 ]
 
@@ -17,6 +26,11 @@ name = "ab_glyph_rasterizer"
 version = "0.1.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c71b1793ee61086797f5c80b6efa2b8ffa6d5dd703f118545808a7f2e27f7046"
+
+[[package]]
+name = "ab_glyph_rasterizer"
+version = "0.1.8"
+source = "git+https://github.com/asibahi/ab-glyph.git#dcf967074f970840b72bc2262821d13ceea87de2"
 
 [[package]]
 name = "adler"
@@ -141,9 +155,9 @@ checksum = "38d17f4d6e4dc36d1a02fbedc2753a096848e7c1b0772f7654eab8e2c927dd53"
 
 [[package]]
 name = "bumpalo"
-version = "3.15.4"
+version = "3.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7ff69b9dd49fd426c69a0db9fc04dd934cdb6645ff000864d98f7e2af8830eaa"
+checksum = "79296716171880943b8470b5f8d03aa55eb2e645a4874bdbb28adb49162e012c"
 
 [[package]]
 name = "bytemuck"
@@ -159,9 +173,9 @@ checksum = "1fd0f2584146f6f2ef48085050886acf353beff7305ebd1ae69500e27c67f64b"
 
 [[package]]
 name = "cc"
-version = "1.0.91"
+version = "1.0.92"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1fd97381a8cc6493395a5afc4c691c1084b3768db713b73aa215217aa245d153"
+checksum = "2678b2e3449475e95b0aa6f9b506a28e61b3dc8996592b983695e8ebb58a8b41"
 dependencies = [
  "jobserver",
  "libc",
@@ -463,9 +477,9 @@ dependencies = [
 
 [[package]]
 name = "getrandom"
-version = "0.2.13"
+version = "0.2.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a06fddc2749e0528d2813f95e050e87e52c8cbbae56223b9babf73b3e53b0cc6"
+checksum = "94b22e06ecb0110981051723910cbf0b5f5e09a2062dd7663334ee79a9d1286c"
 dependencies = [
  "cfg-if",
  "js-sys",
@@ -643,7 +657,7 @@ version = "0.24.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a2a0d7770f428b4615960cc8602775d1f04c75d41b0ccdef862e889ebaae9bbf"
 dependencies = [
- "ab_glyph",
+ "ab_glyph 0.2.24 (registry+https://github.com/rust-lang/crates.io-index)",
  "approx",
  "conv",
  "getrandom",
@@ -893,14 +907,12 @@ checksum = "0676bb32a98c1a483ce53e500a81ad9c3d5b3f7c920c28c24e9cb0980d0b5bc8"
 name = "noor"
 version = "0.1.0"
 dependencies = [
- "ab_glyph",
- "ab_glyph_rasterizer",
+ "ab_glyph 0.2.24 (git+https://github.com/asibahi/ab-glyph.git)",
  "harfbuzz_rs",
  "icu_segmenter",
  "image",
  "imageproc",
  "itertools",
- "owned_ttf_parser",
  "pathfinding",
  "resvg",
 ]

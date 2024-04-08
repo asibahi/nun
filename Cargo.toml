@@ -4,8 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-ab_glyph = "0.2.23"
-ab_glyph_rasterizer = "0.1.8"
+ab_glyph = { git = "https://github.com/asibahi/ab-glyph.git" }
 harfbuzz_rs = "2.0.1"
 icu_segmenter = "1.4.0"
 # harfbuzz_rs = { git = "https://github.com/harfbuzz/harfbuzz_rs.git" }
@@ -16,6 +15,5 @@ image = { version = "0.25", default-features = false, features = [
 ] }
 imageproc = "0.24"
 itertools = "0.12.1"
-owned_ttf_parser = "0.20.0"
 pathfinding = "4.9.1"
 resvg = "0.41.0"
