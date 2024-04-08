@@ -148,22 +148,7 @@ fn write_in_image(
         let bbx = bb.min.x as u32 + MARGIN - visual_trim;
         let bby = bb.min.y as u32 + MARGIN + line as u32 * LINE_HEIGHT;
 
-        if ttfp_font.is_color_glyph(ttfp::GlyphId(info.codepoint as u16)) {
-            // Code doesn't reach here. Does Raqq have no colr table?
-
-            let mut painter = noor::outliner::GlyphPainter {
-                face: ttfp_font,
-                outlined_glyph,
-                scale_factor,
-                outline: vec![],
-                canvas,
-                margin: MARGIN,
-                line,
-                line_height: LINE_HEIGHT,
-            };
-
-            ttfp_font.paint_color_glyph(ttfp::GlyphId(info.codepoint as u16), 0, &mut painter);
-        } else if let Some(colored_glyph) = ttfp_font
+        if let Some(colored_glyph) = ttfp_font
             .glyph_svg_image(ttfp::GlyphId(info.codepoint as u16))
             .and_then(|svg| {
                 resvg::usvg::Tree::from_data(

@@ -7,8 +7,6 @@ use std::{
     ops::Not,
 };
 
-pub mod outliner;
-
 pub const MSHQ: &[u8; 4] = b"MSHQ";
 const MSHQ_MIN: f32 = 0.0;
 const MSHQ_MAX: f32 = 100.0;
@@ -280,8 +278,8 @@ pub fn line_break(
     scale_factor: f32,
     base_stretch: f32,
 ) -> Result<Vec<LineData>, PageError> {
-    let text =text.trim();
-    
+    let text = text.trim();
+
     let segmenter = icu_segmenter::LineSegmenter::new_auto();
     let bps = segmenter.segment_str(text).collect::<Vec<_>>();
 
