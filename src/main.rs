@@ -107,7 +107,7 @@ fn write_in_image(
     };
 
     let hb_buffer = hb::UnicodeBuffer::new().add_str_item(TEXT, slice);
-    let hb_output = hb::shape(&hb_font, hb_buffer, &[]);
+    let hb_output = hb::shape(hb_font, hb_buffer, &[]);
 
     ab_font.set_variation(noor::MSHQ, mshq_val);
     ab_font.set_variation(noor::SPAC, spac_val);
