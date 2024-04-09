@@ -15,7 +15,7 @@ const LINE_HEIGHT: u32 = FACTOR * 150;
 
 const FONT_SIZE: f32 = FACTOR as f32 * 80.0;
 
-const BASE_STRETCH: f32 = 50.0;
+const BASE_STRETCH: f32 = 53.0;
 macro_rules! my_file {
     () => {
         "noor"
@@ -32,8 +32,8 @@ const _OFF_BLACK: [u8; 4] = [0x20, 0x20, 0x20, 0xFF];
 const _GOLD_ORNG: [u8; 4] = [0xB4, 0x89, 0x39, 0xFF];
 const _NAVY_BLUE: [u8; 4] = [0x13, 0x2A, 0x4A, 0xFF];
 
-const TXT_COLOR: image::Rgba<u8> = image::Rgba(_BLACK);
-const BKG_COLOR: image::Rgba<u8> = image::Rgba(_OFF_WHITE);
+const TXT_COLOR: image::Rgba<u8> = image::Rgba(_GOLD_ORNG);
+const BKG_COLOR: image::Rgba<u8> = image::Rgba(_NAVY_BLUE);
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let font_data = std::fs::read("fonts/Raqq.ttf")?;
@@ -56,7 +56,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let line_count = lines.len();
 
-    let mut top: image::RgbaImage = image::ImageBuffer::from_pixel(
+    let mut canvas: image::RgbaImage = image::ImageBuffer::from_pixel(
         IMG_WIDTH,
         line_count as u32 * LINE_HEIGHT + 2 * MARGIN,
         BKG_COLOR,
@@ -64,7 +64,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     for (idx, line) in lines.into_iter().enumerate() {
         write_in_image(
-            &mut top,
+            &mut canvas,
             idx,
             line_count - 1,
             &mut ab_font,
@@ -76,12 +76,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let path = format!("lines/{}_{:.0}.png", my_file!(), BASE_STRETCH);
     let save_file = Path::new(&path);
 
-    let mut bottom: image::RgbaImage =
-        image::ImageBuffer::from_pixel(top.width(), top.height(), TXT_COLOR);
-
-    image::imageops::overlay(&mut bottom, &top, 0, 0);
-
-    bottom.save(save_file)?;
+    canvas.save(save_file)?;
 
     Ok(())
 }
@@ -187,12 +182,11 @@ fn write_in_image(
             outlined_glyph.draw(|px, py, pv| {
                 let px = px + bbx;
                 let py = py + bby;
+                let pv = pv.clamp(0.0, 1.0);
 
                 if canvas.in_bounds(px, py) {
                     let pixel = canvas.get_pixel(px, py).to_owned();
-                    let color = image::Rgba([0; 4]);
-
-                    let weighted_color = imageproc::pixelops::interpolate(color, pixel, pv);
+                    let weighted_color = imageproc::pixelops::interpolate(TXT_COLOR, pixel, pv);
                     canvas.draw_pixel(px, py, weighted_color);
                 }
             });
