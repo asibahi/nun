@@ -6,7 +6,7 @@ use noor::LineData;
 use resvg::{tiny_skia, usvg};
 use std::path::Path;
 
-const FACTOR: u32 = 1;
+const FACTOR: u32 = 4;
 
 const MARGIN: u32 = FACTOR * 100;
 
@@ -15,13 +15,13 @@ const LINE_HEIGHT: u32 = FACTOR * 150;
 
 const FONT_SIZE: f32 = FACTOR as f32 * 80.0;
 
-const BASE_STRETCH: f32 = 50.0;
+const BASE_STRETCH: f32 = 51.0;
 macro_rules! my_file {
     () => {
-        "noor"
+        "noor_harakat"
     };
 }
-static TEXT: &str = include_str!(concat!("../lines/", my_file!(), ".txt"));
+static TEXT: &str = include_str!(concat!("../texts/", my_file!(), ".txt"));
 
 const _WHITE: [u8; 4] = [0xFF; 4];
 const _BLACK: [u8; 4] = [0x0A, 0x0A, 0x0A, 0xFF];
@@ -32,8 +32,8 @@ const _OFF_BLACK: [u8; 4] = [0x20, 0x20, 0x20, 0xFF];
 const _GOLD_ORNG: [u8; 4] = [0xB4, 0x89, 0x39, 0xFF];
 const _NAVY_BLUE: [u8; 4] = [0x13, 0x2A, 0x4A, 0xFF];
 
-const TXT_COLOR: image::Rgba<u8> = image::Rgba(_BLACK);
-const BKG_COLOR: image::Rgba<u8> = image::Rgba(_OFF_WHITE);
+const TXT_COLOR: image::Rgba<u8> = image::Rgba(_WHITE);
+const BKG_COLOR: image::Rgba<u8> = image::Rgba(_OFF_BLACK);
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let font_data = std::fs::read("fonts/Raqq.ttf")?;
@@ -73,7 +73,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         );
     }
 
-    let path = format!("lines/{}_{:.0}.png", my_file!(), BASE_STRETCH);
+    let path = format!("images/{}_{:.0}.png", my_file!(), BASE_STRETCH);
     let save_file = Path::new(&path);
 
     canvas.save(save_file)?;
