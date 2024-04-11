@@ -81,21 +81,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 fn draw_signature(canvas: &mut RgbaImage) {
-    // enclosing curcle
+    // hacky function because I don't understand SVGs.
     let (_, height) = canvas.dimensions();
-    // imageproc::drawing::draw_filled_circle_mut(
-    //     canvas,
-    //     (MARGIN as i32 / 2, (height - MARGIN / 2) as i32),
-    //     MARGIN as i32 / 4,
-    //     Rgba([40; 4]),
-    // );
 
-    // stamp
     static STAMP_SVG: &str = include_str!("../personal_stamp.svg");
-    let tree = resvg::usvg::Tree::from_str(
+    let tree = usvg::Tree::from_str(
         STAMP_SVG,
-        &resvg::usvg::Options::default(),
-        &resvg::usvg::fontdb::Database::new(),
+        &usvg::Options::default(),
+        &usvg::fontdb::Database::new(),
     )
     .unwrap();
 
@@ -137,9 +130,10 @@ fn write_in_image(
     let hb_output = hb::shape(hb_font, hb_buffer, &[]);
 
     let ab_scale = ab_font.pt_to_px_scale(FONT_SIZE).unwrap();
-
     let ab_scaled_font = ab_font.as_scaled(ab_scale);
+
     let scale_factor = ab_scaled_font.scale_factor();
+    let ascent = ab_scaled_font.ascent();
 
     // working around a weird bug if I trim the hb_buffer
     let visual_trim = if last_line {
@@ -148,10 +142,7 @@ fn write_in_image(
         (hb_output.get_glyph_positions()[0].x_advance as f32 * scale_factor.horizontal) as u32
     };
 
-    let ascent = ab_scaled_font.ascent();
-
     let mut caret = 0;
-
     let mut colored_glyphs = vec![];
 
     for (position, info) in hb_output
