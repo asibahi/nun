@@ -7,44 +7,206 @@ use std::{
     ops::Not,
 };
 
-pub const MSHQ: &[u8; 4] = b"MSHQ";
-const MSHQ_MIN: f32 = 0.0;
-const MSHQ_MAX: f32 = 100.0;
+#[derive(Clone, Copy, Debug)]
+pub struct Variation {
+    pub tag: [u8; 4],
+    pub current_value: f32,
 
-pub const SPAC: &[u8; 4] = b"SPAC";
-const SPAC_DEFAULT: f32 = 0.0;
-const SPAC_MIN: f32 = -80.0;
-const SPAC_MAX: f32 = 125.0;
+    min: f32,
+    max: f32,
+
+    best: f32,
+
+    /// lower is better.
+    priority: i32,
+}
+
+impl Variation {
+    pub fn new(tag: [u8; 4], min: f32, max: f32, best: f32, priority: i32) -> Self {
+        Self {
+            tag,
+            min,
+            max,
+            best,
+            current_value: best,
+            priority,
+        }
+    }
+
+    pub fn set_variations<const N: usize>(
+        variations: [Variation; N],
+        ab_font: &mut impl ab_glyph::VariableFont,
+        hb_font: &mut hb::Owned<hb::Font<'_>>,
+    ) {
+        hb_font.set_variations(&variations.map(|v| hb::Variation::new(&v.tag, v.current_value)));
+
+        for v in variations {
+            ab_font.set_variation(&v.tag, v.current_value);
+        }
+    }
+
+    fn cost(&self) -> usize {
+        f32::abs(self.current_value - self.best).powi(self.priority + 2) as usize
+    }
+
+    fn change_current_val(self, new_val: f32) -> Self {
+        Self {
+            current_value: new_val,
+            ..self
+        }
+    }
+}
 
 #[derive(Clone, Copy, Debug)]
-pub struct LineData {
+pub struct LineData<const N: usize> {
     pub start_bp: usize,
     pub end_bp: usize,
-    pub mshq_val: f32,
-    pub spac_val: f32,
+    pub variations: [Variation; N],
 }
-impl LineData {
-    pub fn cost(&self, base: f32) -> usize {
-        (f32::abs(self.mshq_val - base).powi(2).round() + f32::abs(self.spac_val).powi(3).round())
-            as usize
+
+impl<const N: usize> LineData<N> {
+    pub fn new(start_bp: usize, end_bp: usize, variations: [Variation; N]) -> Self {
+        Self {
+            start_bp,
+            end_bp,
+            variations,
+        }
+    }
+
+    fn cost(&self) -> usize {
+        self.variations
+            .iter()
+            .map(|v| v.cost())
+            .reduce(std::ops::Add::add)
+            .unwrap_or(usize::MAX)
     }
 }
 
 #[derive(Debug)]
-pub enum LineError {
+enum LineErrorKind {
     TooLoose,
     TooTight,
-    Indeterminate,
+    Maybe,
+    // Impossible,
+}
+use LineErrorKind::*;
+
+#[derive(Debug)]
+struct LineError {
+    variation: Variation,
+    kind: LineErrorKind,
 }
 
+impl LineError {
+    fn new(kind: LineErrorKind, variation: Variation) -> Self {
+        Self { variation, kind }
+    }
+}
 impl std::error::Error for LineError {}
 impl std::fmt::Display for LineError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            LineError::TooLoose => write!(f, "Line is too loose."),
-            LineError::TooTight => write!(f, "Line is too right."),
-            LineError::Indeterminate => write!(f, "Line is indeterminate."),
+        match self.kind {
+            TooLoose => write!(f, "Line is too loose."),
+            TooTight => write!(f, "Line is too right."),
+            Maybe => write!(f, "Line is indeterminate."),
+            // Impossible => write!(f, "Line is impossible."),
         }
+    }
+}
+
+fn find_optimal_line(
+    hb_font: &mut hb::Font<'_>,
+    text: &str,
+    start_bp: usize,
+    end_bp: usize,
+    goal_width: u32,
+    scale_factor: f32,
+    variable_variation: Variation,
+    fixed_variation: Variation,
+) -> Result<LineData<2>, LineError> {
+    let ret = LineData::new(start_bp, end_bp, [variable_variation, fixed_variation]);
+
+    let mut search_range = variable_variation.min..variable_variation.max;
+
+    let slice = &text[start_bp..end_bp];
+
+    let mut set_slice_to_axis_value = |val: f32| {
+        hb_font.set_variations(&[
+            hb::Variation::new(&variable_variation.tag, val),
+            hb::Variation::new(&fixed_variation.tag, fixed_variation.current_value),
+        ]);
+
+        let buffer = hb::UnicodeBuffer::new().add_str_item(text, slice.trim());
+        let output = hb::shape(hb_font, buffer, &[]);
+
+        let width: i32 = output
+            .get_glyph_positions()
+            .iter()
+            .map(|p| p.x_advance)
+            .sum();
+
+        width as f32 * scale_factor
+    };
+
+    let start_test = set_slice_to_axis_value(search_range.start).round() as u32;
+    let start_variation = variable_variation.change_current_val(search_range.start);
+    match start_test.cmp(&goal_width) {
+        Ordering::Greater => return Err(LineError::new(TooTight, start_variation)),
+        Ordering::Equal => {
+            return Ok(LineData {
+                variations: [start_variation, fixed_variation],
+                ..ret
+            })
+        }
+        Ordering::Less => (),
+    }
+
+    let end_test = set_slice_to_axis_value(search_range.end).round() as u32;
+    let end_variation = variable_variation.change_current_val(search_range.end);
+    match end_test.cmp(&goal_width) {
+        Ordering::Less => return Err(LineError::new(TooLoose, end_variation)),
+        Ordering::Equal => {
+            return Ok(LineData {
+                variations: [end_variation, fixed_variation],
+                ..ret
+            })
+        }
+        Ordering::Greater => (),
+    }
+
+    if start_test == end_test {
+        return Err(LineError::new(Maybe, start_variation));
+    }
+
+    let mut prev_test = None;
+
+    let mut i = 0;
+    loop {
+        let mid = (search_range.start + search_range.end) / 2.0;
+        let mid_variation = variable_variation.change_current_val(mid);
+
+        let test = set_slice_to_axis_value(mid).round() as u32;
+
+        if i == 30 || Some(test) == prev_test {
+            return Ok(LineData {
+                variations: [mid_variation, fixed_variation],
+                ..ret
+            });
+        }
+
+        search_range = match test.cmp(&goal_width) {
+            Ordering::Less => mid..search_range.end,
+            Ordering::Equal => {
+                return Ok(LineData {
+                    variations: [mid_variation, fixed_variation],
+                    ..ret
+                })
+            }
+            Ordering::Greater => search_range.start..mid,
+        };
+
+        i += 1;
+        prev_test = Some(test);
     }
 }
 
@@ -61,230 +223,118 @@ impl std::fmt::Display for PageError {
     }
 }
 
-pub fn find_optimal_line(
-    hb_font: &mut hb::Font<'_>,
-    text: &str,
-    start_bp: usize,
-    end_bp: usize,
-    desired_width: u32,
-    scale_factor: f32,
-) -> Result<LineData, LineError> {
-    let ret = LineData {
-        start_bp,
-        end_bp,
-        mshq_val: 50.0,
-        spac_val: SPAC_DEFAULT,
-    };
-
-    let mut search_range = MSHQ_MIN..MSHQ_MAX;
-
-    let slice = &text[start_bp..end_bp];
-
-    let mut set_slice_to_axis_value = |val: f32| {
-        hb_font.set_variations(&[
-            hb::Variation::new(MSHQ, val),
-            hb::Variation::new(SPAC, SPAC_DEFAULT),
-        ]);
-
-        let buffer = hb::UnicodeBuffer::new().add_str_item(text, slice.trim());
-
-        let output = hb::shape(hb_font, buffer, &[]);
-        let width: i32 = output
-            .get_glyph_positions()
-            .iter()
-            .map(|p| p.x_advance)
-            .sum();
-
-        width as f32 * scale_factor
-    };
-
-    let end_test = set_slice_to_axis_value(search_range.end).round() as u32;
-
-    match end_test.cmp(&desired_width) {
-        Ordering::Less => return Err(LineError::TooLoose),
-        Ordering::Equal => {
-            return Ok(LineData {
-                mshq_val: search_range.end,
-                ..ret
-            })
-        }
-        Ordering::Greater => (),
-    }
-
-    let start_test = set_slice_to_axis_value(search_range.start).round() as u32;
-    match start_test.cmp(&desired_width) {
-        Ordering::Greater => {
-            // TooTight?
-            return find_optimal_line_by_spac_inner(
-                hb_font,
-                text,
-                start_bp,
-                end_bp,
-                desired_width,
-                scale_factor,
-                search_range.start,
-            );
-        }
-        Ordering::Equal => {
-            return Ok(LineData {
-                mshq_val: search_range.start,
-                ..ret
-            })
-        }
-        Ordering::Less => (),
-    }
-
-    if start_test == end_test {
-        return Err(LineError::Indeterminate);
-    }
-
-    let mut prev_test = None;
-
-    for _ in 0..30 {
-        let mid = (search_range.start + search_range.end) / 2.0;
-        let test = set_slice_to_axis_value(mid).round() as u32;
-
-        if Some(test) == prev_test {
-            return find_optimal_line_by_spac_inner(
-                hb_font,
-                text,
-                start_bp,
-                end_bp,
-                desired_width,
-                scale_factor,
-                mid,
-            );
-        }
-
-        search_range = match test.cmp(&desired_width) {
-            Ordering::Less => mid..search_range.end,
-            Ordering::Equal => {
-                return Ok(LineData {
-                    mshq_val: mid,
-                    ..ret
-                })
-            }
-            Ordering::Greater => search_range.start..mid,
-        };
-
-        prev_test = Some(test);
-    }
-
-    Err(LineError::Indeterminate)
-}
-
-fn find_optimal_line_by_spac_inner(
-    hb_font: &mut hb::Font<'_>,
-    text: &str,
-    start_bp: usize,
-    end_bp: usize,
-    desired_width: u32,
-    scale_factor: f32,
-    mshq_val: f32,
-) -> Result<LineData, LineError> {
-    let ret = LineData {
-        start_bp,
-        end_bp,
-        mshq_val,
-        spac_val: SPAC_DEFAULT,
-    };
-
-    let mut search_range = SPAC_MIN..SPAC_MAX;
-
-    let slice = &text[start_bp..end_bp];
-
-    let mut set_slice_to_axis_value = |val: f32| {
-        hb_font.set_variations(&[
-            hb::Variation::new(MSHQ, mshq_val),
-            hb::Variation::new(SPAC, val),
-        ]);
-
-        let buffer = hb::UnicodeBuffer::new().add_str_item(text, slice.trim());
-
-        let output = hb::shape(hb_font, buffer, &[]);
-        let width: i32 = output
-            .get_glyph_positions()
-            .iter()
-            .map(|p| p.x_advance)
-            .sum();
-
-        width as f32 * scale_factor
-    };
-
-    let end_test = set_slice_to_axis_value(search_range.end).round() as u32;
-
-    match end_test.cmp(&desired_width) {
-        Ordering::Less => return Err(LineError::TooLoose),
-        Ordering::Equal => {
-            return Ok(LineData {
-                spac_val: search_range.end,
-                ..ret
-            })
-        }
-        Ordering::Greater => (),
-    }
-
-    let start_test = set_slice_to_axis_value(search_range.start).round() as u32;
-    match start_test.cmp(&desired_width) {
-        Ordering::Greater => return Err(LineError::TooTight),
-        Ordering::Equal => {
-            return Ok(LineData {
-                spac_val: search_range.start,
-                ..ret
-            })
-        }
-        Ordering::Less => (),
-    }
-
-    if start_test == end_test {
-        return Err(LineError::Indeterminate);
-    }
-
-    let mut prev_test = None;
-
-    for _ in 0..30 {
-        let mid = (search_range.start + search_range.end) / 2.0;
-        let test = set_slice_to_axis_value(mid).round() as u32;
-
-        if Some(test) == prev_test {
-            // eprintln!("Line at ({start_bp}-{end_bp}) is indetemrinate. Giving best guess.");
-            return Ok(LineData {
-                spac_val: mid,
-                ..ret
-            });
-        }
-
-        search_range = match test.cmp(&desired_width) {
-            Ordering::Less => mid..search_range.end,
-            Ordering::Equal => {
-                return Ok(LineData {
-                    spac_val: mid,
-                    ..ret
-                })
-            }
-            Ordering::Greater => search_range.start..mid,
-        };
-
-        prev_test = Some(test);
-    }
-
-    Err(LineError::Indeterminate)
-}
-
 pub fn line_break(
     hb_font: &mut hb::Font<'_>,
     text: &str,
-    desired_width: u32,
+    goal_width: u32,
     scale_factor: f32,
-    base_stretch: f32,
-) -> Result<Vec<LineData>, PageError> {
-    let segmenter = icu_segmenter::LineSegmenter::new_auto();
-    let bps = segmenter.segment_str(text).collect::<Vec<_>>();
+    primary_variation: Variation,
+    secondary_variation: Variation,
+) -> Result<Vec<LineData<2>>, PageError> {
+    let mut paragraphs = vec![];
+
+    for paragraph in text.split("\n\n") {
+        let line_data = paragraph_line_break(
+            hb_font,
+            text,
+            paragraph,
+            goal_width,
+            scale_factor,
+            primary_variation,
+            secondary_variation,
+        )?;
+
+        paragraphs.extend(line_data);
+    }
+
+    Ok(paragraphs)
+}
+
+fn single_line_paragraph(
+    hb_font: &mut hb::Font<'_>,
+    full_text: &str,
+    paragraph: &str,
+    goal_width: u32,
+    scale_factor: f32,
+    primary_variation: Variation,
+    secondary_variation: Variation,
+) -> Result<LineData<2>, PageError> {
+    let start_bp = paragraph.as_ptr() as usize - full_text.as_ptr() as usize;
+    let end_bp = start_bp + paragraph.as_bytes().len();
+    match find_optimal_line(
+        hb_font,
+        full_text,
+        start_bp,
+        end_bp,
+        goal_width,
+        scale_factor,
+        primary_variation,
+        secondary_variation,
+    ) {
+        Ok(data) => Ok(data),
+        Err(LineError {
+            variation,
+            kind: TooLoose,
+        }) => Ok(LineData {
+            start_bp,
+            end_bp,
+            variations: [variation, secondary_variation],
+        }),
+        Err(LineError { variation, .. }) => {
+            match find_optimal_line(
+                hb_font,
+                full_text,
+                start_bp,
+                end_bp,
+                goal_width,
+                scale_factor,
+                secondary_variation,
+                variation,
+            ) {
+                Ok(data) => Ok(data),
+                Err(LineError { kind: TooTight, .. }) => Err(PageError::UnableToLayout),
+                Err(LineError { variation, .. }) => Ok(LineData {
+                    start_bp: 0,
+                    end_bp,
+                    variations: [variation, secondary_variation],
+                }),
+            }
+        }
+    }
+}
+
+fn paragraph_line_break(
+    hb_font: &mut hb::Font<'_>,
+    full_text: &str,
+    paragraph: &str,
+    goal_width: u32,
+    scale_factor: f32,
+    primary_variation: Variation,
+    secondary_variation: Variation,
+) -> Result<Vec<LineData<2>>, PageError> {
+    // first see if the whole paragraph fits in one line
+    // for example the Basmala
+    if let Ok(l_b) = single_line_paragraph(
+        hb_font,
+        full_text,
+        paragraph,
+        goal_width,
+        scale_factor,
+        primary_variation,
+        secondary_variation,
+    ) {
+        return Ok(vec![l_b]);
+    }
+
+    let bps = icu_segmenter::LineSegmenter::new_auto()
+        .segment_str(paragraph)
+        .map(|bp| bp + (paragraph.as_ptr() as usize - full_text.as_ptr() as usize))
+        .collect::<Vec<_>>();
 
     let mut nodes = HashSet::new();
-    nodes.insert(0);
+    nodes.insert(bps[0]);
 
-    let mut edges: HashMap<(usize, usize), LineData> = HashMap::new();
+    let mut edges: HashMap<(usize, usize), LineData<2>> = HashMap::new();
 
     for i in 0..bps.len() {
         if nodes.contains(&bps[i]).not() {
@@ -292,22 +342,56 @@ pub fn line_break(
         }
 
         for j in (i..bps.len()).skip(1) {
-            let i = bps[i];
-            let j = bps[j];
-            let attempt = find_optimal_line(hb_font, text, i, j, desired_width, scale_factor);
+            let start_bp = bps[i];
+            let end_bp = bps[j];
+            let fst_try = find_optimal_line(
+                hb_font,
+                full_text,
+                start_bp,
+                end_bp,
+                goal_width,
+                scale_factor,
+                primary_variation,
+                secondary_variation,
+            );
 
-            match attempt {
-                Err(LineError::TooLoose) => continue,
-                Err(LineError::TooTight) => break,
-
-                // Not sure how to deal with this for now
-                Err(LineError::Indeterminate) => {
-                    todo!("Line is indeterminate at ({i}, {j}): {}", &text[i..j])
-                }
-
+            let (nearest_variation, fst_err) = match fst_try {
                 Ok(data) => {
-                    nodes.insert(j);
-                    edges.insert((i, j), data);
+                    nodes.insert(end_bp);
+                    edges.insert((start_bp, end_bp), data);
+                    continue;
+                }
+                Err(LineError { variation, kind }) => (variation, kind),
+            };
+
+            let snd_try = find_optimal_line(
+                hb_font,
+                full_text,
+                start_bp,
+                end_bp,
+                goal_width,
+                scale_factor,
+                secondary_variation,
+                nearest_variation,
+            );
+
+            let snd_err = match snd_try {
+                Ok(data) => {
+                    nodes.insert(end_bp);
+                    edges.insert((start_bp, end_bp), data);
+                    continue;
+                }
+                Err(LineError { kind, .. }) => kind,
+            };
+
+            match (fst_err, snd_err) {
+                (TooTight, TooTight) => break,
+                (TooLoose, _) | (_, TooLoose) => continue,
+                (Maybe, _) | (_, Maybe) => {
+                    unimplemented!(
+                        "No idea what to do. Line is indeterminate at ({start_bp}, {end_bp}): {}",
+                        &full_text[start_bp..end_bp]
+                    )
                 }
             }
         }
@@ -319,7 +403,7 @@ pub fn line_break(
             edges
                 .iter()
                 .filter(|((ki, _), _)| ki == i)
-                .map(|((_, kj), v)| (*kj, v.cost(base_stretch)))
+                .map(|((_, kj), v)| (*kj, v.cost()))
                 .collect::<Vec<_>>()
         },
         |p| p == bps.last().unwrap(),

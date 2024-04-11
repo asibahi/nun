@@ -1,4 +1,4 @@
-use ab_glyph::{self as ab, Font as _, ScaleFont as _, VariableFont as _};
+use ab_glyph::{self as ab, Font as _, ScaleFont as _};
 use harfbuzz_rs as hb;
 use image::{GenericImageView as _, RgbaImage};
 use imageproc::drawing::Canvas as _;
@@ -15,10 +15,10 @@ const LINE_HEIGHT: u32 = FACTOR * 150;
 
 const FONT_SIZE: f32 = FACTOR as f32 * 80.0;
 
-const BASE_STRETCH: f32 = 51.0;
+const BASE_STRETCH: f32 = 50.0;
 macro_rules! my_file {
     () => {
-        "noor_harakat"
+        "qul"
     };
 }
 static TEXT: &str = include_str!(concat!("../texts/", my_file!(), ".txt"));
@@ -32,8 +32,8 @@ const _OFF_BLACK: [u8; 4] = [0x20, 0x20, 0x20, 0xFF];
 const _GOLD_ORNG: [u8; 4] = [0xB4, 0x89, 0x39, 0xFF];
 const _NAVY_BLUE: [u8; 4] = [0x13, 0x2A, 0x4A, 0xFF];
 
-const TXT_COLOR: image::Rgba<u8> = image::Rgba(_WHITE);
-const BKG_COLOR: image::Rgba<u8> = image::Rgba(_OFF_BLACK);
+const TXT_COLOR: image::Rgba<u8> = image::Rgba(_BLACK);
+const BKG_COLOR: image::Rgba<u8> = image::Rgba(_OFF_WHITE);
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let font_data = std::fs::read("fonts/Raqq.ttf")?;
@@ -46,12 +46,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let ab_scaled_font = ab_font.as_scaled(ab_scale);
     let scale_factor = ab_scaled_font.scale_factor();
 
+    let primary_variation = noor::Variation::new(*b"MSHQ", 0.0, 100.0, BASE_STRETCH, 0);
+    let secondary_variation = noor::Variation::new(*b"SPAC", -80.0, 125.0, 0.0, 1);
+
     let lines = noor::line_break(
         &mut hb_font,
         TEXT,
         IMG_WIDTH - 2 * MARGIN,
         scale_factor.horizontal,
-        BASE_STRETCH,
+        primary_variation,
+        secondary_variation,
     )?;
 
     let line_count = lines.len();
@@ -85,19 +89,16 @@ fn write_in_image(
     canvas: &mut RgbaImage,
     line: usize,
     last_line: usize,
-    ab_font: &mut ab::FontRef<'_>,
+    ab_font: &mut (impl ab::Font + ab::VariableFont),
     hb_font: &mut hb::Owned<hb::Font<'_>>,
     LineData {
         start_bp,
         end_bp,
-        mshq_val,
-        spac_val,
-    }: LineData,
+        variations,
+        ..
+    }: LineData<2>,
 ) {
-    hb_font.set_variations(&[
-        hb::Variation::new(noor::MSHQ, mshq_val),
-        hb::Variation::new(noor::SPAC, spac_val),
-    ]);
+    noor::Variation::set_variations(variations, ab_font, hb_font);
 
     // working around a weird bug if I trim the hb_buffer
     let slice = if line == last_line {
@@ -108,9 +109,6 @@ fn write_in_image(
 
     let hb_buffer = hb::UnicodeBuffer::new().add_str_item(TEXT, slice);
     let hb_output = hb::shape(hb_font, hb_buffer, &[]);
-
-    ab_font.set_variation(noor::MSHQ, mshq_val);
-    ab_font.set_variation(noor::SPAC, spac_val);
 
     let ab_scale = ab_font.pt_to_px_scale(FONT_SIZE).unwrap();
 
