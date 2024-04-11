@@ -1,6 +1,6 @@
 use ab_glyph::{self as ab, Font as _, ScaleFont as _};
 use harfbuzz_rs as hb;
-use image::{GenericImageView as _, RgbaImage};
+use image::{GenericImageView as _, Rgba, RgbaImage};
 use imageproc::drawing::Canvas as _;
 use noor::LineData;
 use resvg::{tiny_skia, usvg};
@@ -10,15 +10,15 @@ const FACTOR: u32 = 4;
 
 const MARGIN: u32 = FACTOR * 100;
 
-const IMG_WIDTH: u32 = FACTOR * 2500;
+const IMG_WIDTH: u32 = FACTOR * 2000;
 const LINE_HEIGHT: u32 = FACTOR * 160;
 
 const FONT_SIZE: f32 = FACTOR as f32 * 80.0;
 
-const BASE_STRETCH: f32 = 35.0;
+const BASE_STRETCH: f32 = 50.0;
 macro_rules! my_file {
     () => {
-        "qul_no_basmala"
+        "kursi_harakat"
     };
 }
 static TEXT: &str = include_str!(concat!("../texts/", my_file!(), ".txt"));
@@ -32,8 +32,8 @@ const _OFF_BLACK: [u8; 4] = [0x20, 0x20, 0x20, 0xFF];
 const _GOLD_ORNG: [u8; 4] = [0xB4, 0x89, 0x39, 0xFF];
 const _NAVY_BLUE: [u8; 4] = [0x13, 0x2A, 0x4A, 0xFF];
 
-const TXT_COLOR: image::Rgba<u8> = image::Rgba(_BLACK);
-const BKG_COLOR: image::Rgba<u8> = image::Rgba(_OFF_WHITE);
+const TXT_COLOR: Rgba<u8> = Rgba(_BLACK);
+const BKG_COLOR: Rgba<u8> = Rgba(_OFF_WHITE);
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let font_data = std::fs::read("fonts/Raqq.ttf")?;
@@ -60,7 +60,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let line_count = lines.len();
 
-    let mut canvas: image::RgbaImage = image::ImageBuffer::from_pixel(
+    let mut canvas = RgbaImage::from_pixel(
         IMG_WIDTH,
         line_count as u32 * LINE_HEIGHT + 2 * MARGIN,
         BKG_COLOR,
@@ -70,12 +70,46 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         write_in_image(&mut canvas, idx, &mut ab_font, &mut hb_font, line);
     }
 
+    draw_signature(&mut canvas);
+
     let path = format!("images/{}_{:.0}.png", my_file!(), BASE_STRETCH);
     let save_file = Path::new(&path);
 
     canvas.save(save_file)?;
 
     Ok(())
+}
+
+fn draw_signature(canvas: &mut RgbaImage) {
+    // enclosing curcle
+    let (_, height) = canvas.dimensions();
+    // imageproc::drawing::draw_filled_circle_mut(
+    //     canvas,
+    //     (MARGIN as i32 / 2, (height - MARGIN / 2) as i32),
+    //     MARGIN as i32 / 4,
+    //     Rgba([40; 4]),
+    // );
+
+    // stamp
+    static STAMP_SVG: &str = include_str!("../personal_stamp.svg");
+    let tree = resvg::usvg::Tree::from_str(
+        STAMP_SVG,
+        &resvg::usvg::Options::default(),
+        &resvg::usvg::fontdb::Database::new(),
+    )
+    .unwrap();
+
+    let size = tree.size().to_int_size();
+    let mut pixmap = tiny_skia::Pixmap::new(size.width(), size.height()).unwrap();
+
+    resvg::render(
+        &tree,
+        usvg::Transform::from_scale(FACTOR as f32 / 4.0, FACTOR as f32 / 4.0),
+        &mut pixmap.as_mut(),
+    );
+    let top = RgbaImage::from_raw(size.width(), size.height(), pixmap.data().to_vec()).unwrap();
+
+    image::imageops::overlay(canvas, &top, MARGIN as i64 / 4, (height - MARGIN) as i64);
 }
 
 fn write_in_image(
