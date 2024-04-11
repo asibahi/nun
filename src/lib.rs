@@ -62,6 +62,7 @@ pub struct LineData<const N: usize> {
     pub start_bp: usize,
     pub end_bp: usize,
     pub variations: [Variation; N],
+    pub last_line: bool,
 }
 
 impl<const N: usize> LineData<N> {
@@ -70,6 +71,7 @@ impl<const N: usize> LineData<N> {
             start_bp,
             end_bp,
             variations,
+            last_line: false,
         }
     }
 
@@ -279,6 +281,7 @@ fn single_line_paragraph(
             start_bp,
             end_bp,
             variations: [variation, secondary_variation],
+            last_line: true,
         }),
         Err(LineError { variation, .. }) => {
             match find_optimal_line(
@@ -297,6 +300,7 @@ fn single_line_paragraph(
                     start_bp: 0,
                     end_bp,
                     variations: [variation, secondary_variation],
+                    last_line: true,
                 }),
             }
         }
@@ -410,11 +414,13 @@ fn paragraph_line_break(
     )
     .ok_or(PageError::UnableToLayout)?;
 
-    let lines = shortest_path
+    let mut lines = shortest_path
         .into_iter()
         .tuple_windows()
         .map(|key| edges[&key])
         .collect::<Vec<_>>();
+
+    lines.last_mut().map(|ld| ld.last_line = true);
 
     Ok(lines)
 }

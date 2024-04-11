@@ -10,15 +10,15 @@ const FACTOR: u32 = 4;
 
 const MARGIN: u32 = FACTOR * 100;
 
-const IMG_WIDTH: u32 = FACTOR * 2000;
-const LINE_HEIGHT: u32 = FACTOR * 150;
+const IMG_WIDTH: u32 = FACTOR * 2500;
+const LINE_HEIGHT: u32 = FACTOR * 160;
 
 const FONT_SIZE: f32 = FACTOR as f32 * 80.0;
 
-const BASE_STRETCH: f32 = 50.0;
+const BASE_STRETCH: f32 = 35.0;
 macro_rules! my_file {
     () => {
-        "qul"
+        "qul_no_basmala"
     };
 }
 static TEXT: &str = include_str!(concat!("../texts/", my_file!(), ".txt"));
@@ -67,14 +67,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     for (idx, line) in lines.into_iter().enumerate() {
-        write_in_image(
-            &mut canvas,
-            idx,
-            line_count - 1,
-            &mut ab_font,
-            &mut hb_font,
-            line,
-        );
+        write_in_image(&mut canvas, idx, &mut ab_font, &mut hb_font, line);
     }
 
     let path = format!("images/{}_{:.0}.png", my_file!(), BASE_STRETCH);
@@ -87,21 +80,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 fn write_in_image(
     canvas: &mut RgbaImage,
-    line: usize,
-    last_line: usize,
+    line_number: usize,
     ab_font: &mut (impl ab::Font + ab::VariableFont),
     hb_font: &mut hb::Owned<hb::Font<'_>>,
     LineData {
         start_bp,
         end_bp,
         variations,
-        ..
+        last_line,
     }: LineData<2>,
 ) {
     noor::Variation::set_variations(variations, ab_font, hb_font);
 
     // working around a weird bug if I trim the hb_buffer
-    let slice = if line == last_line {
+    let slice = if last_line {
         TEXT[start_bp..end_bp].trim()
     } else {
         &TEXT[start_bp..end_bp]
@@ -116,7 +108,7 @@ fn write_in_image(
     let scale_factor = ab_scaled_font.scale_factor();
 
     // working around a weird bug if I trim the hb_buffer
-    let visual_trim = if line == last_line {
+    let visual_trim = if last_line {
         0
     } else {
         (hb_output.get_glyph_positions()[0].x_advance as f32 * scale_factor.horizontal) as u32
@@ -150,7 +142,7 @@ fn write_in_image(
 
         let bb = outlined_glyph.px_bounds();
         let bbx = bb.min.x as u32 + MARGIN - visual_trim;
-        let bby = bb.min.y as u32 + MARGIN + line as u32 * LINE_HEIGHT;
+        let bby = bb.min.y as u32 + MARGIN + line_number as u32 * LINE_HEIGHT;
 
         if let Some(colored_glyph) = ab_font
             .glyph_svg_image(ab::GlyphId(info.codepoint as u16))
