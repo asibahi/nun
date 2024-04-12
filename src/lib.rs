@@ -119,8 +119,7 @@ impl std::fmt::Display for LineError {
 fn find_optimal_line(
     hb_font: &mut hb::Font<'_>,
     text: &str,
-    start_bp: usize,
-    end_bp: usize,
+    (start_bp, end_bp): (usize, usize),
     goal_width: u32,
     scale_factor: f32,
     variable_variation: Variation,
@@ -266,8 +265,7 @@ fn single_line_paragraph(
     match find_optimal_line(
         hb_font,
         full_text,
-        start_bp,
-        end_bp,
+        (start_bp, end_bp),
         goal_width,
         scale_factor,
         primary_variation,
@@ -287,8 +285,7 @@ fn single_line_paragraph(
             match find_optimal_line(
                 hb_font,
                 full_text,
-                start_bp,
-                end_bp,
+                (start_bp, end_bp),
                 goal_width,
                 scale_factor,
                 secondary_variation,
@@ -351,8 +348,7 @@ fn paragraph_line_break(
             let fst_try = find_optimal_line(
                 hb_font,
                 full_text,
-                start_bp,
-                end_bp,
+                (start_bp, end_bp),
                 goal_width,
                 scale_factor,
                 primary_variation,
@@ -371,8 +367,7 @@ fn paragraph_line_break(
             let snd_try = find_optimal_line(
                 hb_font,
                 full_text,
-                start_bp,
-                end_bp,
+                (start_bp, end_bp),
                 goal_width,
                 scale_factor,
                 secondary_variation,
@@ -419,8 +414,9 @@ fn paragraph_line_break(
         .tuple_windows()
         .map(|key| edges[&key])
         .collect::<Vec<_>>();
-
-    lines.last_mut().map(|ld| ld.last_line = true);
+    if let Some(ld) = lines.last_mut() {
+        ld.last_line = true;
+    }
 
     Ok(lines)
 }
