@@ -5,9 +5,9 @@ edition = "2021"
 
 [dependencies]
 ab_glyph = { git = "https://github.com/asibahi/ab-glyph.git" }
-harfbuzz_rs = "2.0.1"
+harfbuzz_rs = { git = "https://github.com/asibahi/harfbuzz_rs.git" }
+# harfbuzz_rs = "2.0.1" # crates.io version
 icu_segmenter = "1.4.0"
-# harfbuzz_rs = { git = "https://github.com/harfbuzz/harfbuzz_rs.git" }
 image = { version = "0.25", default-features = false, features = [
     "png",
     "jpeg",
