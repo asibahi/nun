@@ -337,6 +337,12 @@ fn paragraph_line_break(
         for j in (i..bps.len()).skip(1) {
             let start_bp = bps[i];
             let end_bp = bps[j];
+
+            if full_text[end_bp..].chars().next().is_some_and(|c| c == '۝') {
+                // avoid lines starting with Aya markers
+                continue;
+            }
+
             let fst_try = find_optimal_line(
                 hb_font,
                 full_text,
