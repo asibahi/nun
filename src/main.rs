@@ -4,7 +4,7 @@ use image::{GenericImageView as _, Rgba, RgbaImage};
 use imageproc::drawing::Canvas as _;
 use noor::LineData;
 use resvg::{tiny_skia, usvg};
-use std::path::Path;
+use std::{ops::Add, path::Path};
 
 const FACTOR: u32 = 4;
 
@@ -18,7 +18,7 @@ const FONT_SIZE: f32 = FACTOR as f32 * 80.0;
 const BASE_STRETCH: f32 = 50.0;
 macro_rules! my_file {
     () => {
-        "kursi_harakat"
+        "qul"
     };
 }
 static TEXT: &str = include_str!(concat!("../texts/", my_file!(), ".txt"));
@@ -36,6 +36,8 @@ const TXT_COLOR: Rgba<u8> = Rgba(_BLACK);
 const BKG_COLOR: Rgba<u8> = Rgba(_OFF_WHITE);
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let full_text = TEXT.trim();
+
     let font_data = std::fs::read("fonts/Raqq.ttf")?;
 
     let mut hb_font = hb::Font::new(hb::Face::from_bytes(&font_data, 0));
@@ -51,7 +53,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let lines = noor::line_break(
         &mut hb_font,
-        TEXT,
+        full_text,
         IMG_WIDTH - 2 * MARGIN,
         scale_factor.horizontal,
         primary_variation,
@@ -67,7 +69,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     for (idx, line) in lines.into_iter().enumerate() {
-        write_in_image(&mut canvas, idx, &mut ab_font, &mut hb_font, line);
+        write_in_image(
+            full_text,
+            &mut canvas,
+            idx,
+            &mut ab_font,
+            &mut hb_font,
+            line,
+        );
     }
 
     draw_signature(&mut canvas);
@@ -106,6 +115,7 @@ fn draw_signature(canvas: &mut RgbaImage) {
 }
 
 fn write_in_image(
+    full_text: &str,
     canvas: &mut RgbaImage,
     line_number: usize,
     ab_font: &mut (impl ab::Font + ab::VariableFont),
@@ -114,19 +124,12 @@ fn write_in_image(
         start_bp,
         end_bp,
         variations,
-        last_line,
+        ..
     }: LineData<2>,
 ) {
     noor::Variation::set_variations(variations, ab_font, hb_font);
 
-    // working around a weird bug if I trim the hb_buffer
-    let slice = if last_line {
-        TEXT[start_bp..end_bp].trim()
-    } else {
-        &TEXT[start_bp..end_bp]
-    };
-
-    let hb_buffer = hb::UnicodeBuffer::new().add_str_item(TEXT, slice);
+    let hb_buffer = hb::UnicodeBuffer::new().add_str_item(full_text, &full_text[start_bp..end_bp]);
     let hb_output = hb::shape(hb_font, hb_buffer, &[]);
 
     let ab_scale = ab_font.pt_to_px_scale(FONT_SIZE).unwrap();
@@ -135,12 +138,15 @@ fn write_in_image(
     let scale_factor = ab_scaled_font.scale_factor();
     let ascent = ab_scaled_font.ascent();
 
-    // working around a weird bug if I trim the hb_buffer
-    let visual_trim = if last_line {
-        0
-    } else {
-        (hb_output.get_glyph_positions()[0].x_advance as f32 * scale_factor.horizontal) as u32
-    };
+    // to align everything to the right. works around the weird shaping bug
+    let line_width = hb_output
+        .get_glyph_positions()
+        .iter()
+        .map(|p| p.x_advance as f32 * scale_factor.horizontal)
+        .reduce(Add::add)
+        .unwrap_or_default() as u32;
+    // except basmalas to the center.
+    let line_width = line_width + (IMG_WIDTH - 2 * MARGIN).saturating_sub(line_width) / 2;
 
     let mut caret = 0;
     let mut colored_glyphs = vec![];
@@ -166,7 +172,7 @@ fn write_in_image(
         };
 
         let bb = outlined_glyph.px_bounds();
-        let bbx = bb.min.x as u32 + MARGIN - visual_trim;
+        let bbx = bb.min.x as u32 + (IMG_WIDTH - MARGIN - line_width);
         let bby = bb.min.y as u32 + MARGIN + line_number as u32 * LINE_HEIGHT;
 
         if let Some(colored_glyph) = ab_font
