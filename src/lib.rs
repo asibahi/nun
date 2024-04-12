@@ -121,7 +121,6 @@ fn find_optimal_line(
     text: &str,
     (start_bp, end_bp): (usize, usize),
     goal_width: u32,
-    scale_factor: f32,
     variable_variation: Variation,
     fixed_variation: Variation,
 ) -> Result<LineData<2>, LineError> {
@@ -146,10 +145,10 @@ fn find_optimal_line(
             .map(|p| p.x_advance)
             .sum();
 
-        width as f32 * scale_factor
+        width as u32
     };
 
-    let start_test = set_slice_to_axis_value(search_range.start).round() as u32;
+    let start_test = set_slice_to_axis_value(search_range.start);
     let start_variation = variable_variation.change_current_val(search_range.start);
     match start_test.cmp(&goal_width) {
         Ordering::Greater => return Err(LineError::new(TooTight, start_variation)),
@@ -162,7 +161,7 @@ fn find_optimal_line(
         Ordering::Less => (),
     }
 
-    let end_test = set_slice_to_axis_value(search_range.end).round() as u32;
+    let end_test = set_slice_to_axis_value(search_range.end);
     let end_variation = variable_variation.change_current_val(search_range.end);
     match end_test.cmp(&goal_width) {
         Ordering::Less => return Err(LineError::new(TooLoose, end_variation)),
@@ -186,7 +185,7 @@ fn find_optimal_line(
         let mid = (search_range.start + search_range.end) / 2.0;
         let mid_variation = variable_variation.change_current_val(mid);
 
-        let test = set_slice_to_axis_value(mid).round() as u32;
+        let test = set_slice_to_axis_value(mid);
 
         if i == 30 || Some(test) == prev_test {
             return Ok(LineData {
@@ -228,7 +227,6 @@ pub fn line_break(
     hb_font: &mut hb::Font<'_>,
     text: &str,
     goal_width: u32,
-    scale_factor: f32,
     primary_variation: Variation,
     secondary_variation: Variation,
 ) -> Result<Vec<LineData<2>>, PageError> {
@@ -240,7 +238,6 @@ pub fn line_break(
             text,
             paragraph,
             goal_width,
-            scale_factor,
             primary_variation,
             secondary_variation,
         )?;
@@ -256,7 +253,6 @@ fn single_line_paragraph(
     full_text: &str,
     paragraph: &str,
     goal_width: u32,
-    scale_factor: f32,
     primary_variation: Variation,
     secondary_variation: Variation,
 ) -> Result<LineData<2>, PageError> {
@@ -267,7 +263,6 @@ fn single_line_paragraph(
         full_text,
         (start_bp, end_bp),
         goal_width,
-        scale_factor,
         primary_variation,
         secondary_variation,
     ) {
@@ -287,7 +282,6 @@ fn single_line_paragraph(
                 full_text,
                 (start_bp, end_bp),
                 goal_width,
-                scale_factor,
                 secondary_variation,
                 variation,
             ) {
@@ -309,7 +303,6 @@ fn paragraph_line_break(
     full_text: &str,
     paragraph: &str,
     goal_width: u32,
-    scale_factor: f32,
     primary_variation: Variation,
     secondary_variation: Variation,
 ) -> Result<Vec<LineData<2>>, PageError> {
@@ -320,7 +313,6 @@ fn paragraph_line_break(
         full_text,
         paragraph,
         goal_width,
-        scale_factor,
         primary_variation,
         secondary_variation,
     ) {
@@ -350,7 +342,6 @@ fn paragraph_line_break(
                 full_text,
                 (start_bp, end_bp),
                 goal_width,
-                scale_factor,
                 primary_variation,
                 secondary_variation,
             );
@@ -369,7 +360,6 @@ fn paragraph_line_break(
                 full_text,
                 (start_bp, end_bp),
                 goal_width,
-                scale_factor,
                 secondary_variation,
                 nearest_variation,
             );

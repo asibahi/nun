@@ -54,8 +54,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let lines = noor::line_break(
         &mut hb_font,
         full_text,
-        IMG_WIDTH - 2 * MARGIN,
-        scale_factor.horizontal,
+        ((IMG_WIDTH - 2 * MARGIN) as f32 / scale_factor.horizontal) as u32,
         primary_variation,
         secondary_variation,
     )?;
