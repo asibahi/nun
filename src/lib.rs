@@ -211,14 +211,14 @@ fn find_optimal_line(
 }
 
 #[derive(Debug)]
-pub enum PageError {
+pub enum ParagraphError {
     UnableToLayout,
 }
-impl std::error::Error for PageError {}
-impl std::fmt::Display for PageError {
+impl std::error::Error for ParagraphError {}
+impl std::fmt::Display for ParagraphError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            PageError::UnableToLayout => write!(f, "Unable to layout page."),
+            ParagraphError::UnableToLayout => write!(f, "Unable to layout paragraph."),
         }
     }
 }
@@ -229,7 +229,7 @@ pub fn line_break(
     goal_width: u32,
     primary_variation: Variation,
     secondary_variation: Variation,
-) -> Result<Vec<LineData<2>>, PageError> {
+) -> Result<Vec<LineData<2>>, ParagraphError> {
     let mut paragraphs = vec![];
 
     for paragraph in text.split("\n\n") {
@@ -255,7 +255,7 @@ fn single_line_paragraph(
     goal_width: u32,
     primary_variation: Variation,
     secondary_variation: Variation,
-) -> Result<LineData<2>, PageError> {
+) -> Result<LineData<2>, ParagraphError> {
     let start_bp = paragraph.as_ptr() as usize - full_text.as_ptr() as usize;
     let end_bp = start_bp + paragraph.as_bytes().len();
     let ret = LineData {
@@ -277,17 +277,17 @@ fn single_line_paragraph(
     };
 
     let snd_attempt = find_optimal_line(
-                hb_font,
-                full_text,
-                (start_bp, end_bp),
-                goal_width,
-                secondary_variation,
+        hb_font,
+        full_text,
+        (start_bp, end_bp),
+        goal_width,
+        secondary_variation,
         primary_variation,
     );
 
     match (snd_attempt, err.kind) {
         (Ok(data), _) => Ok(data),
-        (Err(LineError { kind: TooTight, .. }), TooTight) => Err(PageError::UnableToLayout),
+        (Err(LineError { kind: TooTight, .. }), TooTight) => Err(ParagraphError::UnableToLayout),
 
         // probably unreachable:
         (Err(LineError { kind: TooTight, .. }), TooLoose) => Ok(LineData {
@@ -308,7 +308,7 @@ fn paragraph_line_break(
     goal_width: u32,
     primary_variation: Variation,
     secondary_variation: Variation,
-) -> Result<Vec<LineData<2>>, PageError> {
+) -> Result<Vec<LineData<2>>, ParagraphError> {
     // first see if the whole paragraph fits in one line
     // for example the Basmala
     if let Ok(l_b) = single_line_paragraph(
@@ -400,7 +400,7 @@ fn paragraph_line_break(
         },
         |p| p == bps.last().unwrap(),
     )
-    .ok_or(PageError::UnableToLayout)?;
+    .ok_or(ParagraphError::UnableToLayout)?;
 
     let mut lines = shortest_path
         .into_iter()
