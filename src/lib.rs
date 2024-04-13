@@ -288,12 +288,6 @@ fn single_line_paragraph(
     match (snd_attempt, err.kind) {
         (Ok(data), _) => Ok(data),
         (Err(LineError { kind: TooTight, .. }), TooTight) => Err(ParagraphError::UnableToLayout),
-
-        // probably unreachable:
-        (Err(LineError { kind: TooTight, .. }), TooLoose) => Ok(LineData {
-            variations: [primary_variation, secondary_variation],
-            ..ret
-        }),
         (Err(LineError { variation, .. }), _) => Ok(LineData {
             variations: [primary_variation, variation],
             ..ret
