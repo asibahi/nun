@@ -15,7 +15,8 @@ const LINE_HEIGHT: u32 = FACTOR * 160;
 
 const FONT_SIZE: f32 = FACTOR as f32 * 80.0;
 
-const BASE_STRETCH: f32 = 50.0;
+const MSHQ_DEFAULT: f32 = 25.0;
+const SPAC_DEFAULT: f32 = 0.0;
 macro_rules! my_file {
     () => {
         "qul"
@@ -48,8 +49,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let ab_scaled_font = ab_font.as_scaled(ab_scale);
     let scale_factor = ab_scaled_font.scale_factor();
 
-    let primary_variation = noor::Variation::new(*b"MSHQ", 0.0, 100.0, BASE_STRETCH, 0);
-    let secondary_variation = noor::Variation::new(*b"SPAC", -80.0, 125.0, 0.0, 1);
+    let primary_variation = noor::Variation::new(*b"MSHQ", 0.0, 100.0, MSHQ_DEFAULT, 0);
+    let secondary_variation = noor::Variation::new(*b"SPAC", -80.0, 125.0, SPAC_DEFAULT, 1);
 
     let lines = noor::line_break(
         &mut hb_font,
@@ -80,7 +81,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     draw_signature(&mut canvas);
 
-    let path = format!("images/{}_{:.0}.png", my_file!(), BASE_STRETCH);
+    let path = format!("images/{}_{:.0}.png", my_file!(), MSHQ_DEFAULT);
     let save_file = Path::new(&path);
 
     canvas.save(save_file)?;
