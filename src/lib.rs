@@ -62,7 +62,6 @@ pub struct LineData<const N: usize> {
     pub start_bp: usize,
     pub end_bp: usize,
     pub variations: [Variation; N],
-    pub last_line: bool,
 }
 
 impl<const N: usize> LineData<N> {
@@ -71,7 +70,6 @@ impl<const N: usize> LineData<N> {
             start_bp,
             end_bp,
             variations,
-            last_line: false,
         }
     }
 
@@ -94,18 +92,18 @@ enum LineErrorKind {
 use LineErrorKind::*;
 
 #[derive(Debug)]
-struct LineError {
-    variation: Variation,
+struct LineError<const N: usize> {
+    variations: [Variation; N],
     kind: LineErrorKind,
 }
 
-impl LineError {
-    fn new(kind: LineErrorKind, variation: Variation) -> Self {
-        Self { variation, kind }
+impl<const N: usize> LineError<N> {
+    fn new(kind: LineErrorKind, variations: [Variation; N]) -> Self {
+        Self { variations, kind }
     }
 }
-impl std::error::Error for LineError {}
-impl std::fmt::Display for LineError {
+impl<const N: usize> std::error::Error for LineError<N> {}
+impl<const N: usize> std::fmt::Display for LineError<N> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self.kind {
             TooLoose => write!(f, "Line is too loose."),
@@ -116,14 +114,14 @@ impl std::fmt::Display for LineError {
     }
 }
 
-fn find_optimal_line(
+fn find_optimal_line_1_axis(
     hb_font: &mut hb::Font<'_>,
     text: &str,
     (start_bp, end_bp): (usize, usize),
     goal_width: u32,
     variable_variation: Variation,
     fixed_variation: Variation,
-) -> Result<LineData<2>, LineError> {
+) -> Result<LineData<2>, LineError<2>> {
     let ret = LineData::new(start_bp, end_bp, [variable_variation, fixed_variation]);
 
     let mut search_range = variable_variation.min..variable_variation.max;
@@ -151,29 +149,23 @@ fn find_optimal_line(
         }
     };
 
-    let start_variation = variable_variation.change_current_val(search_range.start);
-
+    let variations = [
+        variable_variation.change_current_val(search_range.start),
+        fixed_variation,
+    ];
     match set_slice_to_axis_value(search_range.start) {
-        Ordering::Greater => return Err(LineError::new(TooTight, start_variation)),
-        Ordering::Equal => {
-            return Ok(LineData {
-                variations: [start_variation, fixed_variation],
-                ..ret
-            })
-        }
+        Ordering::Greater => return Err(LineError::new(TooTight, variations)),
+        Ordering::Equal => return Ok(LineData { variations, ..ret }),
         Ordering::Less => (),
     }
 
-    let end_variation = variable_variation.change_current_val(search_range.end);
-
+    let variations = [
+        variable_variation.change_current_val(search_range.end),
+        fixed_variation,
+    ];
     match set_slice_to_axis_value(search_range.end) {
-        Ordering::Less => return Err(LineError::new(TooLoose, end_variation)),
-        Ordering::Equal => {
-            return Ok(LineData {
-                variations: [end_variation, fixed_variation],
-                ..ret
-            })
-        }
+        Ordering::Less => return Err(LineError::new(TooLoose, variations)),
+        Ordering::Equal => return Ok(LineData { variations, ..ret }),
         Ordering::Greater => (),
     }
 
@@ -186,28 +178,53 @@ fn find_optimal_line(
     let mut i = 0;
     loop {
         let mid = (search_range.start + search_range.end) / 2.0;
-        let mid_variation = variable_variation.change_current_val(mid);
+        let variations = [variable_variation.change_current_val(mid), fixed_variation];
 
         if i >= 30 {
-            return Ok(LineData {
-                variations: [mid_variation, fixed_variation],
-                ..ret
-            });
+            return Ok(LineData { variations, ..ret });
         }
 
         search_range = match set_slice_to_axis_value(mid) {
             Ordering::Less => mid..search_range.end,
-            Ordering::Equal => {
-                return Ok(LineData {
-                    variations: [mid_variation, fixed_variation],
-                    ..ret
-                })
-            }
+            Ordering::Equal => return Ok(LineData { variations, ..ret }),
             Ordering::Greater => search_range.start..mid,
         };
 
         i += 1;
     }
+}
+
+fn find_optimal_line(
+    hb_font: &mut hb::Font<'_>,
+    full_text: &str,
+    start_bp: usize,
+    end_bp: usize,
+    goal_width: u32,
+    primary_variation: Variation,
+    secondary_variation: Variation,
+) -> Result<LineData<2>, LineError<2>> {
+    let fst_try = find_optimal_line_1_axis(
+        hb_font,
+        full_text,
+        (start_bp, end_bp),
+        goal_width,
+        primary_variation,
+        secondary_variation,
+    );
+
+    let nearest_variation = match fst_try {
+        Ok(data) => return Ok(data),
+        Err(LineError { variations, .. }) => variations,
+    };
+
+    find_optimal_line_1_axis(
+        hb_font,
+        full_text,
+        (start_bp, end_bp),
+        goal_width,
+        secondary_variation,
+        nearest_variation[0],
+    )
 }
 
 #[derive(Debug)]
@@ -248,53 +265,6 @@ pub fn line_break(
     Ok(paragraphs)
 }
 
-fn single_line_paragraph(
-    hb_font: &mut hb::Font<'_>,
-    full_text: &str,
-    paragraph: &str,
-    goal_width: u32,
-    primary_variation: Variation,
-    secondary_variation: Variation,
-) -> Result<LineData<2>, ParagraphError> {
-    let start_bp = paragraph.as_ptr() as usize - full_text.as_ptr() as usize;
-    let end_bp = start_bp + paragraph.as_bytes().len();
-    let ret = LineData {
-        start_bp,
-        end_bp,
-        variations: [primary_variation, secondary_variation],
-        last_line: true,
-    };
-    let (err, primary_variation) = match find_optimal_line(
-        hb_font,
-        full_text,
-        (start_bp, end_bp),
-        goal_width,
-        primary_variation,
-        secondary_variation,
-    ) {
-        Ok(data) => return Ok(data),
-        Err(err @ LineError { variation, .. }) => (err, variation),
-    };
-
-    let snd_attempt = find_optimal_line(
-        hb_font,
-        full_text,
-        (start_bp, end_bp),
-        goal_width,
-        secondary_variation,
-        primary_variation,
-    );
-
-    match (snd_attempt, err.kind) {
-        (Ok(data), _) => Ok(data),
-        (Err(LineError { kind: TooTight, .. }), TooTight) => Err(ParagraphError::UnableToLayout),
-        (Err(LineError { variation, .. }), _) => Ok(LineData {
-            variations: [primary_variation, variation],
-            ..ret
-        }),
-    }
-}
-
 fn paragraph_line_break(
     hb_font: &mut hb::Font<'_>,
     full_text: &str,
@@ -303,26 +273,38 @@ fn paragraph_line_break(
     primary_variation: Variation,
     secondary_variation: Variation,
 ) -> Result<Vec<LineData<2>>, ParagraphError> {
+    let start_bp = paragraph.as_ptr() as usize - full_text.as_ptr() as usize;
+    let end_bp = start_bp + paragraph.as_bytes().len();
+
     // first see if the whole paragraph fits in one line
     // for example the Basmala
-    if let Ok(l_b) = single_line_paragraph(
+    if let Ok(l_b) = match find_optimal_line(
         hb_font,
         full_text,
-        paragraph,
+        start_bp,
+        end_bp,
         goal_width,
         primary_variation,
         secondary_variation,
     ) {
+        Ok(data) => Ok(data),
+        Err(LineError { kind: TooTight, .. }) => Err(ParagraphError::UnableToLayout),
+        Err(LineError { variations, .. }) => Ok(LineData {
+            start_bp,
+            end_bp,
+            variations,
+        }),
+    } {
         return Ok(vec![l_b]);
     }
 
     let bps = icu_segmenter::LineSegmenter::new_auto()
         .segment_str(paragraph)
-        .map(|bp| bp + (paragraph.as_ptr() as usize - full_text.as_ptr() as usize))
+        .map(|bp| bp + start_bp)
         .collect::<Vec<_>>();
 
     let mut nodes = HashSet::new();
-    nodes.insert(bps[0]);
+    nodes.insert(start_bp);
 
     let mut edges: HashMap<(usize, usize), LineData<2>> = HashMap::new();
 
@@ -340,70 +322,40 @@ fn paragraph_line_break(
                 continue;
             }
 
-            let fst_try = find_optimal_line(
+            match find_optimal_line(
                 hb_font,
                 full_text,
-                (start_bp, end_bp),
+                start_bp,
+                end_bp,
                 goal_width,
                 primary_variation,
                 secondary_variation,
-            );
-
-            let (nearest_variation, fst_err) = match fst_try {
+            ) {
                 Ok(data) => {
                     nodes.insert(end_bp);
                     edges.insert((start_bp, end_bp), data);
-                    continue;
                 }
-                Err(LineError { variation, kind }) => (variation, kind),
-            };
-
-            let snd_try = find_optimal_line(
-                hb_font,
-                full_text,
-                (start_bp, end_bp),
-                goal_width,
-                secondary_variation,
-                nearest_variation,
-            );
-
-            let snd_err = match snd_try {
-                Ok(data) => {
-                    nodes.insert(end_bp);
-                    edges.insert((start_bp, end_bp), data);
-                    continue;
-                }
-                Err(LineError { kind, .. }) => kind,
-            };
-
-            match (fst_err, snd_err) {
-                (TooTight, TooTight) => break,
-                (TooLoose, _) | (_, TooLoose) => continue,
+                Err(LineError { kind: TooTight, .. }) => break,
+                _ => (),
             }
         }
     }
 
-    let (shortest_path, _) = pathfinding::prelude::dijkstra(
-        &bps[0],
-        |i| {
+    pathfinding::prelude::dijkstra(
+        &start_bp,
+        |&i| {
             edges
                 .iter()
-                .filter(|((ki, _), _)| ki == i)
+                .filter(move |(&(ki, _), _)| ki == i)
                 .map(|((_, kj), v)| (*kj, v.cost()))
-                .collect::<Vec<_>>()
         },
-        |p| p == bps.last().unwrap(),
+        |p| *p == end_bp,
     )
-    .ok_or(ParagraphError::UnableToLayout)?;
-
-    let mut lines = shortest_path
-        .into_iter()
-        .tuple_windows()
-        .map(|key| edges[&key])
-        .collect::<Vec<_>>();
-    if let Some(ld) = lines.last_mut() {
-        ld.last_line = true;
-    }
-
-    Ok(lines)
+    .and_then(|(path, _)| {
+        path.into_iter()
+            .tuple_windows()
+            .map(|key| edges.get(&key).copied())
+            .collect::<Option<Vec<_>>>()
+    })
+    .ok_or(ParagraphError::UnableToLayout)
 }
