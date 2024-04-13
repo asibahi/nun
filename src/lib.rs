@@ -88,7 +88,7 @@ impl<const N: usize> LineData<N> {
 enum LineErrorKind {
     TooLoose,
     TooTight,
-    Maybe,
+    // Maybe,
     // Impossible,
 }
 use LineErrorKind::*;
@@ -110,7 +110,7 @@ impl std::fmt::Display for LineError {
         match self.kind {
             TooLoose => write!(f, "Line is too loose."),
             TooTight => write!(f, "Line is too right."),
-            Maybe => write!(f, "Line is indeterminate."),
+            // Maybe => write!(f, "Line is indeterminate."),
             // Impossible => write!(f, "Line is impossible."),
         }
     }
@@ -128,29 +128,32 @@ fn find_optimal_line(
 
     let mut search_range = variable_variation.min..variable_variation.max;
 
-    let slice = &text[start_bp..end_bp];
-
     let mut set_slice_to_axis_value = |val: f32| {
         hb_font.set_variations(&[
             hb::Variation::new(&variable_variation.tag, val),
             hb::Variation::new(&fixed_variation.tag, fixed_variation.current_value),
         ]);
 
-        let buffer = hb::UnicodeBuffer::new().add_str_item(text, slice.trim());
+        let buffer = hb::UnicodeBuffer::new().add_str_item(text, text[start_bp..end_bp].trim());
         let output = hb::shape(hb_font, buffer, &[]);
 
-        let width: i32 = output
+        let width = output
             .get_glyph_positions()
             .iter()
             .map(|p| p.x_advance)
-            .sum();
+            .sum::<i32>() as u32;
 
-        width as u32
+        // more lenient searching
+        if (goal_width.saturating_sub(5)..goal_width.saturating_add(5)).contains(&width) {
+            Ordering::Equal
+        } else {
+            width.cmp(&goal_width)
+        }
     };
 
-    let start_test = set_slice_to_axis_value(search_range.start);
     let start_variation = variable_variation.change_current_val(search_range.start);
-    match start_test.cmp(&goal_width) {
+
+    match set_slice_to_axis_value(search_range.start) {
         Ordering::Greater => return Err(LineError::new(TooTight, start_variation)),
         Ordering::Equal => {
             return Ok(LineData {
@@ -161,9 +164,9 @@ fn find_optimal_line(
         Ordering::Less => (),
     }
 
-    let end_test = set_slice_to_axis_value(search_range.end);
     let end_variation = variable_variation.change_current_val(search_range.end);
-    match end_test.cmp(&goal_width) {
+
+    match set_slice_to_axis_value(search_range.end) {
         Ordering::Less => return Err(LineError::new(TooLoose, end_variation)),
         Ordering::Equal => {
             return Ok(LineData {
@@ -174,27 +177,25 @@ fn find_optimal_line(
         Ordering::Greater => (),
     }
 
-    if start_test == end_test {
-        return Err(LineError::new(Maybe, start_variation));
-    }
-
-    let mut prev_test = None;
+    // What to do if variations do not change the line's width?
+    // Open question for another font !!
+    // if start_test_width == end_test_width {
+    //     return Err(LineError::new(Maybe, start_variation));
+    // }
 
     let mut i = 0;
     loop {
         let mid = (search_range.start + search_range.end) / 2.0;
         let mid_variation = variable_variation.change_current_val(mid);
 
-        let test = set_slice_to_axis_value(mid);
-
-        if i == 30 || Some(test) == prev_test {
+        if i >= 30 {
             return Ok(LineData {
                 variations: [mid_variation, fixed_variation],
                 ..ret
             });
         }
 
-        search_range = match test.cmp(&goal_width) {
+        search_range = match set_slice_to_axis_value(mid) {
             Ordering::Less => mid..search_range.end,
             Ordering::Equal => {
                 return Ok(LineData {
@@ -206,7 +207,6 @@ fn find_optimal_line(
         };
 
         i += 1;
-        prev_test = Some(test);
     }
 }
 
@@ -258,7 +258,13 @@ fn single_line_paragraph(
 ) -> Result<LineData<2>, PageError> {
     let start_bp = paragraph.as_ptr() as usize - full_text.as_ptr() as usize;
     let end_bp = start_bp + paragraph.as_bytes().len();
-    match find_optimal_line(
+    let ret = LineData {
+        start_bp,
+        end_bp,
+        variations: [primary_variation, secondary_variation],
+        last_line: true,
+    };
+    let (err, primary_variation) = match find_optimal_line(
         hb_font,
         full_text,
         (start_bp, end_bp),
@@ -266,35 +272,32 @@ fn single_line_paragraph(
         primary_variation,
         secondary_variation,
     ) {
-        Ok(data) => Ok(data),
-        Err(LineError {
-            variation,
-            kind: TooLoose,
-        }) => Ok(LineData {
-            start_bp,
-            end_bp,
-            variations: [variation, secondary_variation],
-            last_line: true,
-        }),
-        Err(LineError { variation, .. }) => {
-            match find_optimal_line(
+        Ok(data) => return Ok(data),
+        Err(err @ LineError { variation, .. }) => (err, variation),
+    };
+
+    let snd_attempt = find_optimal_line(
                 hb_font,
                 full_text,
                 (start_bp, end_bp),
                 goal_width,
                 secondary_variation,
-                variation,
-            ) {
-                Ok(data) => Ok(data),
-                Err(LineError { kind: TooTight, .. }) => Err(PageError::UnableToLayout),
-                Err(LineError { variation, .. }) => Ok(LineData {
-                    start_bp: 0,
-                    end_bp,
-                    variations: [variation, secondary_variation],
-                    last_line: true,
-                }),
-            }
-        }
+        primary_variation,
+    );
+
+    match (snd_attempt, err.kind) {
+        (Ok(data), _) => Ok(data),
+        (Err(LineError { kind: TooTight, .. }), TooTight) => Err(PageError::UnableToLayout),
+
+        // probably unreachable:
+        (Err(LineError { kind: TooTight, .. }), TooLoose) => Ok(LineData {
+            variations: [primary_variation, secondary_variation],
+            ..ret
+        }),
+        (Err(LineError { variation, .. }), _) => Ok(LineData {
+            variations: [primary_variation, variation],
+            ..ret
+        }),
     }
 }
 
@@ -382,12 +385,6 @@ fn paragraph_line_break(
             match (fst_err, snd_err) {
                 (TooTight, TooTight) => break,
                 (TooLoose, _) | (_, TooLoose) => continue,
-                (Maybe, _) | (_, Maybe) => {
-                    unimplemented!(
-                        "No idea what to do. Line is indeterminate at ({start_bp}, {end_bp}): {}",
-                        &full_text[start_bp..end_bp]
-                    )
-                }
             }
         }
     }
