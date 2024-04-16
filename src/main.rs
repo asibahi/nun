@@ -2,7 +2,7 @@ use ab_glyph::{self as ab, Font as _, ScaleFont as _};
 use harfbuzz_rs as hb;
 use image::{GenericImageView as _, Rgba, RgbaImage};
 use imageproc::drawing::Canvas as _;
-use noor::LineData;
+use nun::LineData;
 use resvg::{tiny_skia, usvg};
 use std::{ops::Add, path::Path};
 
@@ -49,10 +49,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let ab_scaled_font = ab_font.as_scaled(ab_scale);
     let scale_factor = ab_scaled_font.scale_factor();
 
-    let primary_variation = noor::Variation::new(*b"MSHQ", 0.0, 100.0, MSHQ_DEFAULT, 0);
-    let secondary_variation = noor::Variation::new(*b"SPAC", -80.0, 125.0, SPAC_DEFAULT, 1);
+    let primary_variation = nun::Variation::new(*b"MSHQ", 0.0, 100.0, MSHQ_DEFAULT, 0);
+    let secondary_variation = nun::Variation::new(*b"SPAC", -80.0, 125.0, SPAC_DEFAULT, 1);
 
-    let lines = noor::line_break(
+    let lines = nun::line_break(
         &mut hb_font,
         full_text,
         ((IMG_WIDTH - 2 * MARGIN) as f32 / scale_factor.horizontal) as u32,
@@ -127,7 +127,7 @@ fn write_in_image(
         ..
     }: LineData<2>,
 ) {
-    noor::Variation::set_variations(variations, ab_font, hb_font);
+    nun::Variation::set_variations(variations, ab_font, hb_font);
 
     let hb_buffer = hb::UnicodeBuffer::new().add_str_item(full_text, &full_text[start_bp..end_bp]);
     let hb_output = hb::shape(hb_font, hb_buffer, &[]);
