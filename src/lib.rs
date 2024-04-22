@@ -23,14 +23,7 @@ pub struct Variation {
 
 impl Variation {
     pub fn new(tag: [u8; 4], min: f32, max: f32, best: f32, priority: i32) -> Self {
-        Self {
-            tag,
-            min,
-            max,
-            best,
-            current_value: best,
-            priority,
-        }
+        Self { tag, min, max, best, current_value: best, priority }
     }
 
     pub fn set_variations<const N: usize>(
@@ -50,10 +43,7 @@ impl Variation {
     }
 
     fn change_current_val(self, new_val: f32) -> Self {
-        Self {
-            current_value: new_val,
-            ..self
-        }
+        Self { current_value: new_val, ..self }
     }
 }
 
@@ -66,19 +56,11 @@ pub struct LineData<const N: usize> {
 
 impl<const N: usize> LineData<N> {
     pub fn new(start_bp: usize, end_bp: usize, variations: [Variation; N]) -> Self {
-        Self {
-            start_bp,
-            end_bp,
-            variations,
-        }
+        Self { start_bp, end_bp, variations }
     }
 
     fn cost(&self) -> usize {
-        self.variations
-            .iter()
-            .map(|v| v.cost())
-            .reduce(std::ops::Add::add)
-            .unwrap_or(usize::MAX)
+        self.variations.iter().map(Variation::cost).reduce(std::ops::Add::add).unwrap_or(usize::MAX)
     }
 }
 
@@ -89,7 +71,7 @@ enum LineErrorKind {
     // Maybe,
     // Impossible,
 }
-use LineErrorKind::*;
+use LineErrorKind::{TooLoose, TooTight};
 
 #[derive(Debug)]
 struct LineError<const N: usize> {
@@ -135,11 +117,7 @@ fn find_optimal_line_1_axis(
         let buffer = hb::UnicodeBuffer::new().add_str_item(text, text[start_bp..end_bp].trim());
         let output = hb::shape(hb_font, buffer, &[]);
 
-        let width = output
-            .get_glyph_positions()
-            .iter()
-            .map(|p| p.x_advance)
-            .sum::<i32>() as u32;
+        let width = output.get_glyph_positions().iter().map(|p| p.x_advance).sum::<i32>() as u32;
 
         // more lenient searching
         if (goal_width.saturating_sub(5)..goal_width.saturating_add(5)).contains(&width) {
@@ -149,20 +127,14 @@ fn find_optimal_line_1_axis(
         }
     };
 
-    let variations = [
-        variable_variation.change_current_val(search_range.start),
-        fixed_variation,
-    ];
+    let variations = [variable_variation.change_current_val(search_range.start), fixed_variation];
     match set_slice_to_axis_value(search_range.start) {
         Ordering::Greater => return Err(LineError::new(TooTight, variations)),
         Ordering::Equal => return Ok(LineData { variations, ..ret }),
         Ordering::Less => (),
     }
 
-    let variations = [
-        variable_variation.change_current_val(search_range.end),
-        fixed_variation,
-    ];
+    let variations = [variable_variation.change_current_val(search_range.end), fixed_variation];
     match set_slice_to_axis_value(search_range.end) {
         Ordering::Less => return Err(LineError::new(TooLoose, variations)),
         Ordering::Equal => return Ok(LineData { variations, ..ret }),
@@ -289,11 +261,7 @@ fn paragraph_line_break(
     ) {
         Ok(data) => Ok(data),
         Err(LineError { kind: TooTight, .. }) => Err(ParagraphError::UnableToLayout),
-        Err(LineError { variations, .. }) => Ok(LineData {
-            start_bp,
-            end_bp,
-            variations,
-        }),
+        Err(LineError { variations, .. }) => Ok(LineData { start_bp, end_bp, variations }),
     } {
         return Ok(vec![l_b]);
     }
@@ -343,13 +311,8 @@ fn paragraph_line_break(
 
     pathfinding::prelude::dijkstra(
         &start_bp,
-        |&i| {
-            edges
-                .iter()
-                .filter(move |(&(ki, _), _)| ki == i)
-                .map(|((_, kj), v)| (*kj, v.cost()))
-        },
-        |p| *p == end_bp,
+        |&p| edges.iter().filter_map(move |(&(s, e), ld)| s.eq(&p).then(|| (e, ld.cost()))),
+        |&p| p == end_bp,
     )
     .and_then(|(path, _)| {
         path.into_iter()

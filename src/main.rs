@@ -3,7 +3,7 @@ use harfbuzz_rs as hb;
 use image::{GenericImageView as _, Rgba, RgbaImage};
 use imageproc::drawing::Canvas as _;
 use nun::LineData;
-use resvg::{tiny_skia, usvg};
+use resvg::{tiny_skia::Pixmap, usvg};
 use std::{ops::Add, path::Path};
 
 const FACTOR: u32 = 4;
@@ -62,21 +62,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let line_count = lines.len();
 
-    let mut canvas = RgbaImage::from_pixel(
-        IMG_WIDTH,
-        line_count as u32 * LINE_HEIGHT + 2 * MARGIN,
-        BKG_COLOR,
-    );
+    let mut canvas =
+        RgbaImage::from_pixel(IMG_WIDTH, line_count as u32 * LINE_HEIGHT + 2 * MARGIN, BKG_COLOR);
 
     for (idx, line) in lines.into_iter().enumerate() {
-        write_in_image(
-            full_text,
-            &mut canvas,
-            idx,
-            &mut ab_font,
-            &mut hb_font,
-            line,
-        );
+        write_in_image(full_text, &mut canvas, idx, &mut ab_font, &mut hb_font, line);
     }
 
     draw_signature(&mut canvas);
@@ -94,15 +84,12 @@ fn draw_signature(canvas: &mut RgbaImage) {
     let (_, height) = canvas.dimensions();
 
     static STAMP_SVG: &str = include_str!("../personal_stamp.svg");
-    let tree = usvg::Tree::from_str(
-        STAMP_SVG,
-        &usvg::Options::default(),
-        &usvg::fontdb::Database::new(),
-    )
-    .unwrap();
+    let tree =
+        usvg::Tree::from_str(STAMP_SVG, &usvg::Options::default(), &usvg::fontdb::Database::new())
+            .unwrap();
 
     let size = tree.size().to_int_size();
-    let mut pixmap = tiny_skia::Pixmap::new(size.width(), size.height()).unwrap();
+    let mut pixmap = Pixmap::new(size.width(), size.height()).unwrap();
 
     resvg::render(
         &tree,
@@ -120,12 +107,7 @@ fn write_in_image(
     line_number: usize,
     ab_font: &mut (impl ab::Font + ab::VariableFont),
     hb_font: &mut hb::Owned<hb::Font<'_>>,
-    LineData {
-        start_bp,
-        end_bp,
-        variations,
-        ..
-    }: LineData<2>,
+    LineData { start_bp, end_bp, variations }: LineData<2>,
 ) {
     nun::Variation::set_variations(variations, ab_font, hb_font);
 
@@ -151,10 +133,7 @@ fn write_in_image(
     let mut caret = 0;
     let mut colored_glyphs = vec![];
 
-    for (position, info) in hb_output
-        .get_glyph_positions()
-        .iter()
-        .zip(hb_output.get_glyph_infos())
+    for (position, info) in hb_output.get_glyph_positions().iter().zip(hb_output.get_glyph_infos())
     {
         let gl = ab::GlyphId(info.codepoint as u16).with_scale_and_position(
             ab_scale,
@@ -177,28 +156,9 @@ fn write_in_image(
 
         if let Some(colored_glyph) = ab_font
             .glyph_svg_image(ab::GlyphId(info.codepoint as u16))
-            .and_then(|svg| {
-                let tree = usvg::Tree::from_data(
-                    svg.data,
-                    &usvg::Options::default(),
-                    &usvg::fontdb::Database::new(),
-                )
-                .ok()?;
-                let node = tree.node_by_id(&format!("glyph{}", info.codepoint))?;
-                let size = node.abs_layer_bounding_box()?;
-                let transform = usvg::Transform::from_scale(
-                    bb.width() / size.width(),
-                    bb.height() / size.height(),
-                );
-
-                let size = size.to_int_rect();
-                let mut pixmap = tiny_skia::Pixmap::new(size.width(), size.height())?;
-
-                resvg::render_node(node, transform, &mut pixmap.as_mut());
-                RgbaImage::from_raw(size.width(), size.height(), pixmap.data().to_vec())
-            })
+            .and_then(|svg| svg_data_to_glyph(svg.data, bb, info.codepoint))
         {
-            colored_glyphs.push((bbx, bby, colored_glyph))
+            colored_glyphs.push((bbx, bby, colored_glyph));
         } else {
             outlined_glyph.draw(|px, py, pv| {
                 let px = px + bbx;
@@ -214,7 +174,23 @@ fn write_in_image(
         }
     }
 
-    for (bbx, bby, colored_glyph) in colored_glyphs {
+    for (bbx, bby, colored_glyph) in colored_glyphs.into_iter().rev() {
         image::imageops::overlay(canvas, &colored_glyph, bbx.into(), bby.into());
     }
+}
+
+fn svg_data_to_glyph(data: &[u8], bb: ab::Rect, codepoint: u32) -> Option<RgbaImage> {
+    let tree =
+        usvg::Tree::from_data(data, &usvg::Options::default(), &usvg::fontdb::Database::new())
+            .ok()?;
+    let node = tree.node_by_id(&format!("glyph{codepoint}"))?;
+    let size = node.abs_layer_bounding_box()?;
+    let transform =
+        usvg::Transform::from_scale(bb.width() / size.width(), bb.height() / size.height());
+
+    let size = size.to_int_rect();
+    let mut pixmap = Pixmap::new(size.width(), size.height())?;
+
+    resvg::render_node(node, transform, &mut pixmap.as_mut());
+    RgbaImage::from_raw(size.width(), size.height(), pixmap.data().to_vec())
 }

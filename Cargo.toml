@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-ab_glyph = { git = "https://github.com/asibahi/ab-glyph.git" }
+ab_glyph = " 0.2.25"
 harfbuzz_rs = { git = "https://github.com/asibahi/harfbuzz_rs.git" }
 # harfbuzz_rs = "2.0.1" # crates.io version
 icu_segmenter = "1.4.0"
@@ -17,3 +17,9 @@ imageproc = "0.24"
 itertools = "0.12.1"
 pathfinding = "4.9.1"
 resvg = "0.41.0"
+
+[lints.clippy]
+filter_map_bool_then = "allow"
+
+
+
