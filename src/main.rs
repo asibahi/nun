@@ -1,9 +1,9 @@
 use ab_glyph::{self as ab, Font as _, ScaleFont as _};
-use harfbuzz_rs as hb;
 use image::{GenericImageView as _, Rgba, RgbaImage};
 use imageproc::drawing::Canvas as _;
 use nun::LineData;
 use resvg::{tiny_skia::Pixmap, usvg};
+use rustybuzz as rb;
 use std::{ops::Add, path::Path};
 
 const FACTOR: u32 = 4;
@@ -19,7 +19,7 @@ const MSHQ_DEFAULT: f32 = 25.0;
 const SPAC_DEFAULT: f32 = 0.0;
 macro_rules! my_file {
     () => {
-        "qul"
+        "qul_no_basmala"
     };
 }
 static TEXT: &str = include_str!(concat!("../texts/", my_file!(), ".txt"));
@@ -41,7 +41,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let font_data = std::fs::read("fonts/Raqq.ttf")?;
 
-    let mut hb_font = hb::Font::new(hb::Face::from_bytes(&font_data, 0));
+    let mut rb_font = rb::Face::from_slice(&font_data, 0).ok_or("rustybuzz FAIL")?;
 
     let mut ab_font = ab::FontRef::try_from_slice(&font_data)?;
     let ab_scale = ab_font.pt_to_px_scale(FONT_SIZE).unwrap();
@@ -53,7 +53,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let secondary_variation = nun::Variation::new(*b"SPAC", -80.0, 125.0, SPAC_DEFAULT, 1);
 
     let lines = nun::line_break(
-        &mut hb_font,
+        &mut rb_font,
         full_text,
         ((IMG_WIDTH - 2 * MARGIN) as f32 / scale_factor.horizontal) as u32,
         primary_variation,
@@ -66,7 +66,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         RgbaImage::from_pixel(IMG_WIDTH, line_count as u32 * LINE_HEIGHT + 2 * MARGIN, BKG_COLOR);
 
     for (idx, line) in lines.into_iter().enumerate() {
-        write_in_image(full_text, &mut canvas, idx, &mut ab_font, &mut hb_font, line);
+        write_in_image(full_text, &mut canvas, idx, &mut ab_font, &mut rb_font, line);
     }
 
     draw_signature(&mut canvas);
@@ -106,13 +106,16 @@ fn write_in_image(
     canvas: &mut RgbaImage,
     line_number: usize,
     ab_font: &mut (impl ab::Font + ab::VariableFont),
-    hb_font: &mut hb::Owned<hb::Font<'_>>,
+    rb_font: &mut rb::Face<'_>,
     LineData { start_bp, end_bp, variations }: LineData<2>,
 ) {
-    nun::Variation::set_variations(variations, ab_font, hb_font);
+    nun::Variation::set_variations(variations, ab_font, rb_font);
 
-    let hb_buffer = hb::UnicodeBuffer::new().add_str_item(full_text, &full_text[start_bp..end_bp]);
-    let hb_output = hb::shape(hb_font, hb_buffer, &[]);
+    let mut rb_buffer = rb::UnicodeBuffer::new();
+    rb_buffer.push_str(&full_text[start_bp..end_bp]);
+    // rb_buffer.guess_segment_properties(); // do I need this?
+
+    let rb_output = rb::shape(rb_font, &[], rb_buffer);
 
     let ab_scale = ab_font.pt_to_px_scale(FONT_SIZE).unwrap();
     let ab_scaled_font = ab_font.as_scaled(ab_scale);
@@ -121,8 +124,8 @@ fn write_in_image(
     let ascent = ab_scaled_font.ascent();
 
     // to align everything to the right. works around the weird shaping bug
-    let line_width = hb_output
-        .get_glyph_positions()
+    let line_width = rb_output
+        .glyph_positions()
         .iter()
         .map(|p| p.x_advance as f32 * scale_factor.horizontal)
         .reduce(Add::add)
@@ -133,9 +136,8 @@ fn write_in_image(
     let mut caret = 0;
     let mut colored_glyphs = vec![];
 
-    for (position, info) in hb_output.get_glyph_positions().iter().zip(hb_output.get_glyph_infos())
-    {
-        let gl = ab::GlyphId(info.codepoint as u16).with_scale_and_position(
+    for (position, info) in rb_output.glyph_positions().iter().zip(rb_output.glyph_infos()) {
+        let gl = ab::GlyphId(info.glyph_id as u16).with_scale_and_position(
             ab_scale,
             ab::point(
                 (caret + position.x_offset) as f32 * scale_factor.horizontal,
@@ -155,8 +157,8 @@ fn write_in_image(
         let bby = bb.min.y as u32 + MARGIN + line_number as u32 * LINE_HEIGHT;
 
         if let Some(colored_glyph) = ab_font
-            .glyph_svg_image(ab::GlyphId(info.codepoint as u16))
-            .and_then(|svg| svg_data_to_glyph(svg.data, bb, info.codepoint))
+            .glyph_svg_image(ab::GlyphId(info.glyph_id as u16))
+            .and_then(|svg| svg_data_to_glyph(svg.data, bb, info.glyph_id))
         {
             colored_glyphs.push((bbx, bby, colored_glyph));
         } else {

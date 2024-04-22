@@ -17,6 +17,7 @@ imageproc = "0.24"
 itertools = "0.12.1"
 pathfinding = "4.9.1"
 resvg = "0.41.0"
+rustybuzz = "0.13.0"
 
 [lints.clippy]
 filter_map_bool_then = "allow"

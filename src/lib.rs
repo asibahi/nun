@@ -1,5 +1,5 @@
-use harfbuzz_rs as hb;
 use itertools::Itertools as _;
+use rustybuzz as rb;
 use std::{
     cmp::Ordering,
     collections::{HashMap, HashSet},
@@ -29,9 +29,14 @@ impl Variation {
     pub fn set_variations<const N: usize>(
         variations: [Variation; N],
         ab_font: &mut impl ab_glyph::VariableFont,
-        hb_font: &mut hb::Owned<hb::Font<'_>>,
+        rb_font: &mut rb::Face<'_>,
     ) {
-        hb_font.set_variations(&variations.map(|v| hb::Variation::new(&v.tag, v.current_value)));
+        rb_font.set_variations(
+            &variations.map(|v| rb::Variation {
+                tag: rb::Tag::from_bytes(&v.tag),
+                value: v.current_value,
+            }),
+        );
 
         for v in variations {
             ab_font.set_variation(&v.tag, v.current_value);
@@ -97,7 +102,7 @@ impl<const N: usize> std::fmt::Display for LineError<N> {
 }
 
 fn find_optimal_line_1_axis(
-    hb_font: &mut hb::Font<'_>,
+    rb_font: &mut rb::Face<'_>,
     text: &str,
     (start_bp, end_bp): (usize, usize),
     goal_width: u32,
@@ -108,16 +113,19 @@ fn find_optimal_line_1_axis(
 
     let mut search_range = variable_variation.min..variable_variation.max;
 
-    let mut set_slice_to_axis_value = |val: f32| {
-        hb_font.set_variations(&[
-            hb::Variation::new(&variable_variation.tag, val),
-            hb::Variation::new(&fixed_variation.tag, fixed_variation.current_value),
+    let mut set_slice_to_axis_value = |value: f32| {
+        rb_font.set_variations(&[
+            rb::Variation { tag: rb::Tag::from_bytes(&variable_variation.tag), value },
+            rb::Variation { tag: rb::Tag::from_bytes(&fixed_variation.tag), value },
         ]);
 
-        let buffer = hb::UnicodeBuffer::new().add_str_item(text, text[start_bp..end_bp].trim());
-        let output = hb::shape(hb_font, buffer, &[]);
+        let mut buffer = rb::UnicodeBuffer::new();
+        buffer.push_str(text[start_bp..end_bp].trim());
+        // buffer.guess_segment_properties(); // do I need this?
 
-        let width = output.get_glyph_positions().iter().map(|p| p.x_advance).sum::<i32>() as u32;
+        let output = rb::shape(rb_font, &[], buffer);
+
+        let width = output.glyph_positions().iter().map(|p| p.x_advance).sum::<i32>() as u32;
 
         // more lenient searching
         if (goal_width.saturating_sub(5)..goal_width.saturating_add(5)).contains(&width) {
@@ -167,7 +175,7 @@ fn find_optimal_line_1_axis(
 }
 
 fn find_optimal_line(
-    hb_font: &mut hb::Font<'_>,
+    rb_font: &mut rb::Face<'_>,
     full_text: &str,
     start_bp: usize,
     end_bp: usize,
@@ -176,7 +184,7 @@ fn find_optimal_line(
     secondary_variation: Variation,
 ) -> Result<LineData<2>, LineError<2>> {
     let fst_try = find_optimal_line_1_axis(
-        hb_font,
+        rb_font,
         full_text,
         (start_bp, end_bp),
         goal_width,
@@ -190,7 +198,7 @@ fn find_optimal_line(
     };
 
     find_optimal_line_1_axis(
-        hb_font,
+        rb_font,
         full_text,
         (start_bp, end_bp),
         goal_width,
@@ -213,7 +221,7 @@ impl std::fmt::Display for ParagraphError {
 }
 
 pub fn line_break(
-    hb_font: &mut hb::Font<'_>,
+    rb_font: &mut rb::Face<'_>,
     text: &str,
     goal_width: u32,
     primary_variation: Variation,
@@ -223,7 +231,7 @@ pub fn line_break(
 
     for paragraph in text.split("\n\n") {
         let line_data = paragraph_line_break(
-            hb_font,
+            rb_font,
             text,
             paragraph,
             goal_width,
@@ -238,7 +246,7 @@ pub fn line_break(
 }
 
 fn paragraph_line_break(
-    hb_font: &mut hb::Font<'_>,
+    rb_font: &mut rb::Face<'_>,
     full_text: &str,
     paragraph: &str,
     goal_width: u32,
@@ -251,7 +259,7 @@ fn paragraph_line_break(
     // first see if the whole paragraph fits in one line
     // for example the Basmala
     if let Ok(l_b) = match find_optimal_line(
-        hb_font,
+        rb_font,
         full_text,
         start_bp,
         end_bp,
@@ -291,7 +299,7 @@ fn paragraph_line_break(
             }
 
             match find_optimal_line(
-                hb_font,
+                rb_font,
                 full_text,
                 start_bp,
                 end_bp,

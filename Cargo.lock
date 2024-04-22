@@ -893,6 +893,7 @@ dependencies = [
  "itertools",
  "pathfinding",
  "resvg",
+ "rustybuzz",
 ]
 
 [[package]]
