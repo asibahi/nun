@@ -4,7 +4,7 @@ use image::{GenericImageView as _, Rgba, RgbaImage};
 use imageproc::drawing::Canvas as _;
 use nun::LineData;
 use resvg::{tiny_skia::Pixmap, usvg};
-use std::{ops::Add, path::Path};
+use std::path::Path;
 
 const FACTOR: u32 = 4;
 
@@ -60,10 +60,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         secondary_variation,
     )?;
 
-    let line_count = lines.len();
-
     let mut canvas =
-        RgbaImage::from_pixel(IMG_WIDTH, line_count as u32 * LINE_HEIGHT + 2 * MARGIN, BKG_COLOR);
+        RgbaImage::from_pixel(IMG_WIDTH, lines.len() as u32 * LINE_HEIGHT + 2 * MARGIN, BKG_COLOR);
 
     for (idx, line) in lines.into_iter().enumerate() {
         write_in_image(full_text, &mut canvas, idx, &mut ab_font, &mut hb_font, line);
@@ -111,7 +109,8 @@ fn write_in_image(
 ) {
     nun::Variation::set_variations(variations, ab_font, hb_font);
 
-    let hb_buffer = hb::UnicodeBuffer::new().add_str_item(full_text, &full_text[start_bp..end_bp]);
+    let hb_buffer =
+        hb::UnicodeBuffer::new().add_str_item(full_text, full_text[start_bp..end_bp].trim());
     let hb_output = hb::shape(hb_font, hb_buffer, &[]);
 
     let ab_scale = ab_font.pt_to_px_scale(FONT_SIZE).unwrap();
@@ -119,16 +118,6 @@ fn write_in_image(
 
     let scale_factor = ab_scaled_font.scale_factor();
     let ascent = ab_scaled_font.ascent();
-
-    // to align everything to the right. works around the weird shaping bug
-    let line_width = hb_output
-        .get_glyph_positions()
-        .iter()
-        .map(|p| p.x_advance as f32 * scale_factor.horizontal)
-        .reduce(Add::add)
-        .unwrap_or_default() as u32;
-    // except basmalas to the center.
-    let line_width = line_width + (IMG_WIDTH - 2 * MARGIN).saturating_sub(line_width) / 2;
 
     let mut caret = 0;
     let mut colored_glyphs = vec![];
@@ -151,9 +140,9 @@ fn write_in_image(
         };
 
         let bb = outlined_glyph.px_bounds();
-        let bbx = bb.min.x as u32 + (IMG_WIDTH - MARGIN - line_width);
-        let bby = bb.min.y as u32 + MARGIN + line_number as u32 * LINE_HEIGHT;
-
+        let bbx = (bb.min.x as i32).saturating_add_unsigned(MARGIN);
+        let bby =
+            (bb.min.y as i32).saturating_add_unsigned(MARGIN + line_number as u32 * LINE_HEIGHT);
         if let Some(colored_glyph) = ab_font
             .glyph_svg_image(ab::GlyphId(info.codepoint as u16))
             .and_then(|svg| svg_data_to_glyph(svg.data, bb, info.codepoint))
@@ -161,8 +150,8 @@ fn write_in_image(
             colored_glyphs.push((bbx, bby, colored_glyph));
         } else {
             outlined_glyph.draw(|px, py, pv| {
-                let px = px + bbx;
-                let py = py + bby;
+                let px = px.saturating_add_signed(bbx);
+                let py = py.saturating_add_signed(bby);
                 let pv = pv.clamp(0.0, 1.0);
 
                 if canvas.in_bounds(px, py) {
