@@ -106,30 +106,45 @@ pub struct Glyph {
 }
 
 pub fn shape_line(hb_font: &mut hb::Font<'_>, line: &str) -> Vec<Glyph> {
-    const END_OF_AYAH: u32 = 357;
     const SPACE: u32 = 1;
 
     let buffer = hb::UnicodeBuffer::new().add_str(line);
     let output = hb::shape(hb_font, buffer, &[]);
 
+    let end_of_ayah_10_advance: i32 = hb_font
+        .get_glyph_from_name("endofayah-ar.10")
+        .map(|p| hb_font.get_glyph_h_advance(p))
+        .unwrap();
+
+    let space_advance = hb_font.get_glyph_h_advance(SPACE);
+
     let mut ret = vec![];
 
     for (info, pos) in output.get_glyph_infos().iter().zip(output.get_glyph_positions()) {
-        let prev = ret.last();
+        if info.codepoint == SPACE
+            && ret.last().is_some_and(|p: &Glyph| {
+                hb_font.get_glyph_name(p.codepoint).is_some_and(|s| s.contains("ayah"))
+            })
+        {
+            continue;
+        }
+
+        let end_of_ayah =
+            hb_font.get_glyph_name(info.codepoint).is_some_and(|s| s.contains("endofayah"));
+        let end_of_ayah_word =
+            hb_font.get_glyph_name(info.codepoint).is_some_and(|s| s.contains("ayah"));
+
         let g = Glyph {
             codepoint: info.codepoint,
             cluster: info.cluster,
-            x_advance: {
-                if info.codepoint == END_OF_AYAH
-                    || (info.codepoint == SPACE
-                        && prev.is_some_and(|p: &Glyph| p.codepoint == END_OF_AYAH))
-                {
-                    0
-                } else {
-                    pos.x_advance
-                }
+            x_advance: if end_of_ayah_word { 0 } else { pos.x_advance },
+            x_offset: if end_of_ayah {
+                -(pos.x_advance + space_advance) / 2
+            } else if end_of_ayah_word {
+                -(end_of_ayah_10_advance + space_advance) / 2 + pos.x_offset
+            } else {
+                pos.x_offset
             },
-            x_offset: if info.codepoint == END_OF_AYAH { -pos.x_advance } else { pos.x_offset },
             y_advance: pos.y_advance,
             y_offset: pos.y_offset,
         };
