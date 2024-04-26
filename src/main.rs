@@ -19,7 +19,7 @@ const MSHQ_DEFAULT: f32 = 50.0;
 const SPAC_DEFAULT: f32 = 0.0;
 macro_rules! my_file {
     () => {
-        "noor"
+        "ikhlas"
     };
 }
 static TEXT: &str = include_str!(concat!("../texts/", my_file!(), ".txt"));
@@ -109,9 +109,7 @@ fn write_in_image(
 ) {
     nun::Variation::set_variations(variations, ab_font, hb_font);
 
-    let hb_buffer =
-        hb::UnicodeBuffer::new().add_str_item(full_text, full_text[start_bp..end_bp].trim());
-    let hb_output = hb::shape(hb_font, hb_buffer, &[]);
+    let hb_output = nun::shape_line(hb_font, full_text[start_bp..end_bp].trim());
 
     let ab_scale = ab_font.pt_to_px_scale(FONT_SIZE).unwrap();
     let ab_scaled_font = ab_font.as_scaled(ab_scale);
@@ -122,17 +120,16 @@ fn write_in_image(
     let mut caret = 0;
     let mut colored_glyphs = vec![];
 
-    for (position, info) in hb_output.get_glyph_positions().iter().zip(hb_output.get_glyph_infos())
-    {
-        let gl = ab::GlyphId(info.codepoint as u16).with_scale_and_position(
+    for glyph in hb_output {
+        let gl = ab::GlyphId(glyph.codepoint as u16).with_scale_and_position(
             ab_scale,
             ab::point(
-                (caret + position.x_offset) as f32 * scale_factor.horizontal,
-                ascent - (position.y_offset as f32 * scale_factor.vertical),
+                (caret + glyph.x_offset) as f32 * scale_factor.horizontal,
+                ascent - (glyph.y_offset as f32 * scale_factor.vertical),
             ),
         );
 
-        caret += position.x_advance;
+        caret += glyph.x_advance;
 
         let Some(outlined_glyph) = ab_font.outline_glyph(gl) else {
             // gl is whitespace
@@ -144,8 +141,8 @@ fn write_in_image(
         let bby =
             (bb.min.y as i32).saturating_add_unsigned(MARGIN + line_number as u32 * LINE_HEIGHT);
         if let Some(colored_glyph) = ab_font
-            .glyph_svg_image(ab::GlyphId(info.codepoint as u16))
-            .and_then(|svg| svg_data_to_glyph(svg.data, bb, info.codepoint))
+            .glyph_svg_image(ab::GlyphId(glyph.codepoint as u16))
+            .and_then(|svg| svg_data_to_glyph(svg.data, bb, glyph.codepoint))
         {
             colored_glyphs.push((bbx, bby, colored_glyph));
         } else {

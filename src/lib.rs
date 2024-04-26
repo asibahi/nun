@@ -96,6 +96,50 @@ impl<const N: usize> std::fmt::Display for LineError<N> {
     }
 }
 
+pub struct Glyph {
+    pub codepoint: u32,
+    pub cluster: u32,
+    pub x_advance: i32,
+    pub x_offset: i32,
+    pub y_advance: i32,
+    pub y_offset: i32,
+}
+
+pub fn shape_line(hb_font: &mut hb::Font<'_>, line: &str) -> Vec<Glyph> {
+    const END_OF_AYAH: u32 = 357;
+    const SPACE: u32 = 1;
+
+    let buffer = hb::UnicodeBuffer::new().add_str(line);
+    let output = hb::shape(hb_font, buffer, &[]);
+
+    let ret = output
+        .get_glyph_infos()
+        .iter()
+        .zip(output.get_glyph_positions())
+        .circular_tuple_windows()
+        .map(|(prev, (info, pos))| Glyph {
+            codepoint: info.codepoint,
+            cluster: info.cluster,
+            x_advance: {
+                if info.codepoint == END_OF_AYAH
+                    || (info.codepoint == SPACE && prev.0.codepoint == END_OF_AYAH)
+                {
+                    0
+                } else {
+                    pos.x_advance
+                }
+            },
+            x_offset: if info.codepoint == END_OF_AYAH { -pos.x_advance } else { pos.x_offset },
+            y_advance: pos.y_advance,
+            y_offset: pos.y_offset,
+        });
+
+    let mut ret = ret.collect::<Vec<_>>();
+    ret.rotate_right(1);
+
+    ret
+}
+
 fn find_optimal_line_1_axis(
     hb_font: &mut hb::Font<'_>,
     text: &str,
@@ -114,10 +158,10 @@ fn find_optimal_line_1_axis(
             hb::Variation::new(&fixed_variation.tag, fixed_variation.current_value),
         ]);
 
-        let buffer = hb::UnicodeBuffer::new().add_str_item(text, text[start_bp..end_bp].trim());
-        let output = hb::shape(hb_font, buffer, &[]);
-
-        let width = output.get_glyph_positions().iter().map(|p| p.x_advance).sum::<i32>() as u32;
+        let width = shape_line(hb_font, text[start_bp..end_bp].trim())
+            .iter()
+            .map(|g| g.x_advance)
+            .sum::<i32>() as u32;
 
         // more lenient searching
         if (goal_width.saturating_sub(5)..goal_width.saturating_add(5)).contains(&width) {
