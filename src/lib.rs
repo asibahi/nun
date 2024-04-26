@@ -112,17 +112,17 @@ pub fn shape_line(hb_font: &mut hb::Font<'_>, line: &str) -> Vec<Glyph> {
     let buffer = hb::UnicodeBuffer::new().add_str(line);
     let output = hb::shape(hb_font, buffer, &[]);
 
-    let ret = output
-        .get_glyph_infos()
-        .iter()
-        .zip(output.get_glyph_positions())
-        .circular_tuple_windows()
-        .map(|(prev, (info, pos))| Glyph {
+    let mut ret = vec![];
+
+    for (info, pos) in output.get_glyph_infos().iter().zip(output.get_glyph_positions()) {
+        let prev = ret.last();
+        let g = Glyph {
             codepoint: info.codepoint,
             cluster: info.cluster,
             x_advance: {
                 if info.codepoint == END_OF_AYAH
-                    || (info.codepoint == SPACE && prev.0.codepoint == END_OF_AYAH)
+                    || (info.codepoint == SPACE
+                        && prev.is_some_and(|p: &Glyph| p.codepoint == END_OF_AYAH))
                 {
                     0
                 } else {
@@ -132,10 +132,10 @@ pub fn shape_line(hb_font: &mut hb::Font<'_>, line: &str) -> Vec<Glyph> {
             x_offset: if info.codepoint == END_OF_AYAH { -pos.x_advance } else { pos.x_offset },
             y_advance: pos.y_advance,
             y_offset: pos.y_offset,
-        });
+        };
 
-    let mut ret = ret.collect::<Vec<_>>();
-    ret.rotate_right(1);
+        ret.push(g);
+    }
 
     ret
 }
