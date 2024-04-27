@@ -4,7 +4,10 @@ use image::{GenericImageView as _, Rgba, RgbaImage};
 use imageproc::drawing::Canvas as _;
 use nun::LineData;
 use resvg::{tiny_skia::Pixmap, usvg};
-use std::path::Path;
+use std::{
+    ops::{Div, Mul, Sub},
+    path::Path,
+};
 
 const FACTOR: u32 = 4;
 
@@ -19,7 +22,7 @@ const MSHQ_DEFAULT: f32 = 50.0;
 const SPAC_DEFAULT: f32 = 0.0;
 macro_rules! my_file {
     () => {
-        "noor"
+        "qul"
     };
 }
 static TEXT: &str = include_str!(concat!("../texts/", my_file!(), ".txt"));
@@ -119,6 +122,14 @@ fn write_in_image(
     let scale_factor = ab_scaled_font.scale_factor();
     let ascent = ab_scaled_font.ascent();
 
+    let centered_line_offset = (IMG_WIDTH - 2 * MARGIN).saturating_sub(
+        hb_output
+            .get_glyph_positions()
+            .iter()
+            .map(|p| (p.x_advance as f32 * scale_factor.horizontal))
+            .sum::<f32>() as u32,
+    ) / 2;
+
     let mut caret = 0;
     let mut colored_glyphs = vec![];
 
@@ -140,7 +151,7 @@ fn write_in_image(
         };
 
         let bb = outlined_glyph.px_bounds();
-        let bbx = (bb.min.x as i32).saturating_add_unsigned(MARGIN);
+        let bbx = (bb.min.x as i32).saturating_add_unsigned(MARGIN + centered_line_offset);
         let bby =
             (bb.min.y as i32).saturating_add_unsigned(MARGIN + line_number as u32 * LINE_HEIGHT);
         if let Some(colored_glyph) = ab_font
