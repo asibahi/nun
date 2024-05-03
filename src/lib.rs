@@ -1,11 +1,6 @@
 use harfbuzz_rs as hb;
 use itertools::Itertools as _;
-use std::{
-    cmp::Ordering,
-    collections::{HashMap, HashSet},
-    fmt::Debug,
-    ops::Not,
-};
+use std::{cmp::Ordering, fmt::Debug, ops::Not};
 
 #[derive(Clone, Copy, Debug)]
 pub struct Variation {
@@ -271,10 +266,10 @@ fn paragraph_line_break(
         .map(|bp| bp + start_bp)
         .collect::<Vec<_>>();
 
-    let mut nodes = HashSet::new();
+    let mut nodes = hashbrown::HashSet::new();
     nodes.insert(start_bp);
 
-    let mut edges: HashMap<(usize, usize), LineData<2>> = HashMap::new();
+    let mut edges = hashbrown::HashMap::new();
 
     for i in 0..bps.len() {
         if nodes.contains(&bps[i]).not() {
@@ -317,7 +312,7 @@ fn paragraph_line_break(
     .and_then(|(path, _)| {
         path.into_iter()
             .tuple_windows()
-            .map(|key| edges.get(&key).copied())
+            .map(|key: (_, _)| edges.get(&key).copied())
             .collect::<Option<Vec<_>>>()
     })
     .ok_or(ParagraphError::UnableToLayout)

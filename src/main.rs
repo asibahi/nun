@@ -4,10 +4,7 @@ use image::{GenericImageView as _, Rgba, RgbaImage};
 use imageproc::drawing::Canvas as _;
 use nun::LineData;
 use resvg::{tiny_skia::Pixmap, usvg};
-use std::{
-    ops::{Div, Mul, Sub},
-    path::Path,
-};
+use std::path::Path;
 
 const FACTOR: u32 = 4;
 
