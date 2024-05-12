@@ -37,8 +37,9 @@ impl Variation {
         f32::abs(self.current_value - self.best).powi(self.priority + 2) as usize
     }
 
-    fn change_current_val(self, new_val: f32) -> Self {
-        Self { current_value: new_val, ..self }
+    fn change_current_val(&mut self, new_val: f32) -> &mut Self {
+        self.current_value = new_val;
+        self
     }
 }
 
@@ -91,23 +92,29 @@ impl<const N: usize> std::fmt::Display for LineError<N> {
     }
 }
 
-fn find_optimal_line_1_axis(
+fn find_optimal_line_1_axis<const N: usize>(
     hb_font: &mut hb::Font<'_>,
     text: &str,
     (start_bp, end_bp): (usize, usize),
     goal_width: u32,
-    variable_variation: Variation,
-    fixed_variation: Variation,
-) -> Result<LineData<2>, LineError<2>> {
-    let ret = LineData::new(start_bp, end_bp, [variable_variation, fixed_variation]);
+    vv_idx: usize,
+    mut variations: [Variation; N],
+) -> Result<LineData<N>, LineError<N>> {
+    assert!(vv_idx < N, "Index should be within the variations array");
 
-    let mut search_range = variable_variation.min..variable_variation.max;
+    let ret = LineData::new(start_bp, end_bp, variations);
+
+    let mut search_range = variations[vv_idx].min..variations[vv_idx].max;
 
     let mut set_slice_to_axis_value = |val: f32| {
-        hb_font.set_variations(&[
-            hb::Variation::new(&variable_variation.tag, val),
-            hb::Variation::new(&fixed_variation.tag, fixed_variation.current_value),
-        ]);
+        variations[vv_idx].change_current_val(val);
+
+        let hb_variations = variations
+            .iter()
+            .map(|v| hb::Variation::new(&v.tag, v.current_value))
+            .collect::<Vec<_>>();
+
+        hb_font.set_variations(&hb_variations);
 
         let buffer = hb::UnicodeBuffer::new().add_str_item(text, text[start_bp..end_bp].trim());
         let output = hb::shape(hb_font, buffer, &[]);
@@ -122,14 +129,12 @@ fn find_optimal_line_1_axis(
         }
     };
 
-    let variations = [variable_variation.change_current_val(search_range.start), fixed_variation];
     match set_slice_to_axis_value(search_range.start) {
         Ordering::Greater => return Err(LineError::new(TooTight, variations)),
         Ordering::Equal => return Ok(LineData { variations, ..ret }),
         Ordering::Less => (),
     }
 
-    let variations = [variable_variation.change_current_val(search_range.end), fixed_variation];
     match set_slice_to_axis_value(search_range.end) {
         Ordering::Less => return Err(LineError::new(TooLoose, variations)),
         Ordering::Equal => return Ok(LineData { variations, ..ret }),
@@ -138,14 +143,10 @@ fn find_optimal_line_1_axis(
 
     // What to do if variations do not change the line's width?
     // Open question for another font !!
-    // if start_test_width == end_test_width {
-    //     return Err(LineError::new(Maybe, start_variation));
-    // }
 
     let mut i = 0;
     loop {
         let mid = (search_range.start + search_range.end) / 2.0;
-        let variations = [variable_variation.change_current_val(mid), fixed_variation];
 
         if i >= 30 {
             return Ok(LineData { variations, ..ret });
@@ -175,11 +176,11 @@ fn find_optimal_line(
         full_text,
         (start_bp, end_bp),
         goal_width,
-        primary_variation,
-        secondary_variation,
+        0,
+        [primary_variation, secondary_variation],
     );
 
-    let nearest_variation = match fst_try {
+    let nearest_variations = match fst_try {
         Ok(data) => return Ok(data),
         Err(LineError { variations, .. }) => variations,
     };
@@ -189,8 +190,8 @@ fn find_optimal_line(
         full_text,
         (start_bp, end_bp),
         goal_width,
-        secondary_variation,
-        nearest_variation[0],
+        1,
+        nearest_variations,
     )
 }
 

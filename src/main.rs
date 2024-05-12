@@ -19,7 +19,7 @@ const MSHQ_DEFAULT: f32 = 50.0;
 const SPAC_DEFAULT: f32 = 0.0;
 macro_rules! my_file {
     () => {
-        "qul"
+        "noor"
     };
 }
 static TEXT: &str = include_str!(concat!("../texts/", my_file!(), ".txt"));
