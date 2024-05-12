@@ -37,9 +37,8 @@ impl Variation {
         f32::abs(self.current_value - self.best).powi(self.priority + 2) as usize
     }
 
-    fn change_current_val(&mut self, new_val: f32) -> &mut Self {
+    fn change_current_val(&mut self, new_val: f32) {
         self.current_value = new_val;
-        self
     }
 }
 
@@ -162,37 +161,33 @@ fn find_optimal_line_1_axis<const N: usize>(
     }
 }
 
-fn find_optimal_line(
+fn find_optimal_line<const N: usize>(
     hb_font: &mut hb::Font<'_>,
     full_text: &str,
     start_bp: usize,
     end_bp: usize,
     goal_width: u32,
-    primary_variation: Variation,
-    secondary_variation: Variation,
-) -> Result<LineData<2>, LineError<2>> {
-    let fst_try = find_optimal_line_1_axis(
-        hb_font,
-        full_text,
-        (start_bp, end_bp),
-        goal_width,
-        0,
-        [primary_variation, secondary_variation],
-    );
+    mut variations: [Variation; N],
+) -> Result<LineData<N>, LineError<N>> {
+    assert!(N > 0);
 
-    let nearest_variations = match fst_try {
-        Ok(data) => return Ok(data),
-        Err(LineError { variations, .. }) => variations,
-    };
+    for (idx, counter) in (0..N).rev().enumerate() {
+        let attempt = find_optimal_line_1_axis(
+            hb_font,
+            full_text,
+            (start_bp, end_bp),
+            goal_width,
+            idx,
+            variations,
+        );
 
-    find_optimal_line_1_axis(
-        hb_font,
-        full_text,
-        (start_bp, end_bp),
-        goal_width,
-        1,
-        nearest_variations,
-    )
+        variations = match (attempt, counter) {
+            (result @ Ok(_), _) | (result @ Err(_), 0) => return result,
+            (Err(LineError { variations, .. }), _) => variations,
+        };
+    }
+
+    unreachable!("Optimal line loop always runs");
 }
 
 #[derive(Debug)]
@@ -208,13 +203,13 @@ impl std::fmt::Display for ParagraphError {
     }
 }
 
-pub fn line_break(
+pub fn line_break<const N: usize>(
     hb_font: &mut hb::Font<'_>,
     text: &str,
     goal_width: u32,
-    primary_variation: Variation,
-    secondary_variation: Variation,
-) -> Result<Vec<LineData<2>>, ParagraphError> {
+    variations: [Variation; N],
+  
+) -> Result<Vec<LineData<N>>, ParagraphError> {
     let mut paragraphs = vec![];
 
     for paragraph in text.split("\n\n") {
@@ -223,8 +218,7 @@ pub fn line_break(
             text,
             paragraph,
             goal_width,
-            primary_variation,
-            secondary_variation,
+     variations
         )?;
 
         paragraphs.extend(line_data);
@@ -233,32 +227,25 @@ pub fn line_break(
     Ok(paragraphs)
 }
 
-fn paragraph_line_break(
+fn paragraph_line_break<const N: usize>(
     hb_font: &mut hb::Font<'_>,
     full_text: &str,
     paragraph: &str,
     goal_width: u32,
-    primary_variation: Variation,
-    secondary_variation: Variation,
-) -> Result<Vec<LineData<2>>, ParagraphError> {
+    variations: [Variation; N],
+) -> Result<Vec<LineData<N>>, ParagraphError> {
     let start_bp = paragraph.as_ptr() as usize - full_text.as_ptr() as usize;
     let end_bp = start_bp + paragraph.as_bytes().len();
 
     // first see if the whole paragraph fits in one line
     // for example the Basmala
-    if let Ok(l_b) = match find_optimal_line(
-        hb_font,
-        full_text,
-        start_bp,
-        end_bp,
-        goal_width,
-        primary_variation,
-        secondary_variation,
-    ) {
-        Ok(data) => Ok(data),
-        Err(LineError { kind: TooTight, .. }) => Err(ParagraphError::UnableToLayout),
-        Err(LineError { variations, .. }) => Ok(LineData { start_bp, end_bp, variations }),
-    } {
+    if let Ok(l_b) =
+        match find_optimal_line(hb_font, full_text, start_bp, end_bp, goal_width, variations) {
+            Ok(data) => Ok(data),
+            Err(LineError { kind: TooTight, .. }) => Err(ParagraphError::UnableToLayout),
+            Err(LineError { variations, .. }) => Ok(LineData { start_bp, end_bp, variations }),
+        }
+    {
         return Ok(vec![l_b]);
     }
 
@@ -286,15 +273,7 @@ fn paragraph_line_break(
                 continue;
             }
 
-            match find_optimal_line(
-                hb_font,
-                full_text,
-                start_bp,
-                end_bp,
-                goal_width,
-                primary_variation,
-                secondary_variation,
-            ) {
+            match find_optimal_line(hb_font, full_text, start_bp, end_bp, goal_width, variations) {
                 Ok(data) => {
                     nodes.insert(end_bp);
                     edges.insert((start_bp, end_bp), data);

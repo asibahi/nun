@@ -49,15 +49,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let ab_scaled_font = ab_font.as_scaled(ab_scale);
     let scale_factor = ab_scaled_font.scale_factor();
 
-    let primary_variation = nun::Variation::new(*b"MSHQ", 0.0, 100.0, MSHQ_DEFAULT, 0);
-    let secondary_variation = nun::Variation::new(*b"SPAC", -80.0, 125.0, SPAC_DEFAULT, 1);
+    let variations = [
+        nun::Variation::new(*b"MSHQ", 0.0, 100.0, MSHQ_DEFAULT, 0),
+        nun::Variation::new(*b"SPAC", -80.0, 125.0, SPAC_DEFAULT, 1),
+    ];
 
     let lines = nun::line_break(
         &mut hb_font,
         full_text,
         ((IMG_WIDTH - 2 * MARGIN) as f32 / scale_factor.horizontal) as u32,
-        primary_variation,
-        secondary_variation,
+        variations,
     )?;
 
     let mut canvas =
