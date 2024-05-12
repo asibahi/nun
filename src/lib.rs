@@ -219,14 +219,14 @@ fn find_optimal_line<const N: usize>(
         unreachable!("Inner optimal line loop always runs");
     };
 
-    for (k, counter) in (0..kashida_locs.len()).rev().enumerate() {
+    for (k, counter) in (0..=kashida_locs.len()).rev().enumerate() {
         match (inner(k), counter) {
             (result @ Ok(_), _) | (result @ Err(_), 0) => return result,
             (Err(_), _) => (),
         }
     }
 
-    inner(0) // for when kashida_locs is empty, otherwise unreachable
+    unreachable!("Outer optimal line loop always runs");
 }
 
 #[derive(Debug)]
