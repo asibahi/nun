@@ -667,8 +667,6 @@ dependencies = [
 [[package]]
 name = "kashida"
 version = "0.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "85f32e172ea506b7c070669c0426092ab21110c2a9456f36c8059e20a14fbb75"
 dependencies = [
  "constcat",
  "hashbrown",
