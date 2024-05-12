@@ -16,7 +16,6 @@ image = { version = "0.25", default-features = false, features = [
 ] }
 imageproc = "0.24"
 itertools = "0.12.1"
-kashida = "0.0.1"
 pathfinding = "4.9.1"
 resvg = "0.41.0"
 

@@ -215,12 +215,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3d7b894f5411737b7867f4827955924d7c254fc9f4d91a6aad6b097804b1018b"
 
 [[package]]
-name = "constcat"
-version = "0.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1f2e5af989b1955b092db01462980c0a286217f86817e12b2c09aea46bd03651"
-
-[[package]]
 name = "conv"
 version = "0.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -665,18 +659,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "kashida"
-version = "0.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "85f32e172ea506b7c070669c0426092ab21110c2a9456f36c8059e20a14fbb75"
-dependencies = [
- "constcat",
- "hashbrown",
- "icu_segmenter",
- "itertools",
-]
-
-[[package]]
 name = "kurbo"
 version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -930,7 +912,6 @@ dependencies = [
  "image",
  "imageproc",
  "itertools",
- "kashida",
  "pathfinding",
  "resvg",
 ]
