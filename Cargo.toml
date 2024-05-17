@@ -15,7 +15,7 @@ image = { version = "0.25", default-features = false, features = [
     "rayon",
 ] }
 imageproc = "0.24"
-itertools = "0.12.1"
+itertools = "0.13"
 # kashida = "0.0.1" # crates.io version
 # kashida = { git = "https://github.com/asibahi/kashida.git" } # github repo
 kashida = { path = "../kashida/" } # local repo to allow for iteration
