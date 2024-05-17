@@ -922,6 +922,7 @@ dependencies = [
  "image",
  "imageproc",
  "itertools",
+ "kashida",
  "pathfinding",
  "resvg",
 ]
