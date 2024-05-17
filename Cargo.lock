@@ -659,6 +659,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "kashida"
+version = "0.0.6"
+dependencies = [
+ "hashbrown",
+ "icu_segmenter",
+ "itertools",
+ "unicode-joining-type",
+]
+
+[[package]]
 name = "kurbo"
 version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1544,6 +1554,12 @@ name = "unicode-ident"
 version = "1.0.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3354b9ac3fae1ff6755cb6db53683adb661634f67557942dea4facebec0fee4b"
+
+[[package]]
+name = "unicode-joining-type"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "22f8cb47ccb8bc750808755af3071da4a10dcd147b68fc874b7ae4b12543f6f5"
 
 [[package]]
 name = "unicode-properties"

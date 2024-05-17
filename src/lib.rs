@@ -1,6 +1,6 @@
 use harfbuzz_rs as hb;
 use itertools::Itertools as _;
-use std::{cmp::Ordering, fmt::Debug, ops::Not};
+use std::{borrow::Cow, cmp::Ordering, ops::Not};
 
 #[derive(Clone, Copy, Debug)]
 pub struct Variation {
@@ -42,20 +42,30 @@ impl Variation {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub struct LineData<const N: usize> {
     pub start_bp: usize,
     pub end_bp: usize,
+    pub kashida_locs: Box<[usize]>,
     pub variations: [Variation; N],
 }
 
 impl<const N: usize> LineData<N> {
-    pub fn new(start_bp: usize, end_bp: usize, variations: [Variation; N]) -> Self {
-        Self { start_bp, end_bp, variations }
+    pub fn new(
+        start_bp: usize,
+        end_bp: usize,
+        kashida_locs: &[usize],
+        variations: [Variation; N],
+    ) -> Self {
+        Self { start_bp, end_bp, kashida_locs: kashida_locs.into(), variations }
     }
 
     fn cost(&self) -> usize {
-        self.variations.iter().map(Variation::cost).reduce(std::ops::Add::add).unwrap_or(usize::MAX)
+        self.variations
+            .iter()
+            .fold(0, |acc, v| acc + v.cost())
+            // figuring out the proper cost function is WIP. I hate inserting kashidas
+            .saturating_pow(self.kashida_locs.len() as u32 + 1)
     }
 }
 
@@ -84,10 +94,22 @@ impl<const N: usize> std::fmt::Display for LineError<N> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self.kind {
             TooLoose => write!(f, "Line is too loose."),
-            TooTight => write!(f, "Line is too right."),
+            TooTight => write!(f, "Line is too tight."),
             // Maybe => write!(f, "Line is indeterminate."),
             // Impossible => write!(f, "Line is impossible."),
         }
+    }
+}
+
+pub fn place_kashidas<'a>(text: &'a str, kashida_locs: &'_ [usize]) -> Cow<'a, str> {
+    if kashida_locs.is_empty() {
+        Cow::Borrowed(text)
+    } else {
+        let mut buffer = text.to_owned();
+        for kc in kashida_locs.iter().sorted_by(|a, b| b.cmp(a)) {
+            buffer.insert(*kc, 'ـ');
+        }
+        Cow::Owned(buffer)
     }
 }
 
@@ -96,14 +118,17 @@ fn find_optimal_line_1_axis<const N: usize>(
     text: &str,
     (start_bp, end_bp): (usize, usize),
     goal_width: u32,
+    kashida_locs: &[usize],
     vv_idx: usize,
     mut variations: [Variation; N],
 ) -> Result<LineData<N>, LineError<N>> {
     assert!(vv_idx < N, "Index should be within the variations array");
 
-    let ret = LineData::new(start_bp, end_bp, variations);
+    let ret = LineData::new(start_bp, end_bp, kashida_locs, variations);
 
     let mut search_range = variations[vv_idx].min..variations[vv_idx].max;
+
+    let text_slice = &place_kashidas(text[start_bp..end_bp].trim(), kashida_locs);
 
     let mut set_slice_to_axis_value = |val: f32| {
         variations[vv_idx].change_current_val(val);
@@ -115,7 +140,7 @@ fn find_optimal_line_1_axis<const N: usize>(
 
         hb_font.set_variations(&hb_variations);
 
-        let buffer = hb::UnicodeBuffer::new().add_str_item(text, text[start_bp..end_bp].trim());
+        let buffer = hb::UnicodeBuffer::new().add_str(text_slice);
         let output = hb::shape(hb_font, buffer, &[]);
 
         let width = output.get_glyph_positions().iter().map(|p| p.x_advance).sum::<i32>() as u32;
@@ -164,30 +189,44 @@ fn find_optimal_line_1_axis<const N: usize>(
 fn find_optimal_line<const N: usize>(
     hb_font: &mut hb::Font<'_>,
     full_text: &str,
-    start_bp: usize,
-    end_bp: usize,
+    (start_bp, end_bp): (usize, usize),
     goal_width: u32,
     mut variations: [Variation; N],
 ) -> Result<LineData<N>, LineError<N>> {
     assert!(N > 0);
 
-    for (idx, counter) in (0..N).rev().enumerate() {
-        let attempt = find_optimal_line_1_axis(
-            hb_font,
-            full_text,
-            (start_bp, end_bp),
-            goal_width,
-            idx,
-            variations,
-        );
+    let kashida_locs =
+        kashida::find_kashidas(&full_text[start_bp..end_bp], kashida::Script::Arabic);
 
-        variations = match (attempt, counter) {
+    let mut inner = |k| {
+        for (idx, counter) in (0..N).rev().enumerate() {
+            let attempt = find_optimal_line_1_axis(
+                hb_font,
+                full_text,
+                (start_bp, end_bp),
+                goal_width,
+                &kashida_locs[0..k],
+                idx,
+                variations,
+            );
+
+            variations = match (attempt, counter) {
+                (result @ Ok(_), _) | (result @ Err(_), 0) => return result,
+                (Err(LineError { variations, .. }), _) => variations,
+            };
+        }
+
+        unreachable!("Inner optimal line loop always runs");
+    };
+
+    for (k, counter) in (0..=kashida_locs.len()).rev().enumerate() {
+        match (inner(k), counter) {
             (result @ Ok(_), _) | (result @ Err(_), 0) => return result,
-            (Err(LineError { variations, .. }), _) => variations,
-        };
+            (Err(_), _) => (),
+        }
     }
 
-    unreachable!("Optimal line loop always runs");
+    unreachable!("Outer optimal line loop always runs");
 }
 
 #[derive(Debug)]
@@ -208,18 +247,11 @@ pub fn line_break<const N: usize>(
     text: &str,
     goal_width: u32,
     variations: [Variation; N],
-  
 ) -> Result<Vec<LineData<N>>, ParagraphError> {
     let mut paragraphs = vec![];
 
     for paragraph in text.split("\n\n") {
-        let line_data = paragraph_line_break(
-            hb_font,
-            text,
-            paragraph,
-            goal_width,
-     variations
-        )?;
+        let line_data = paragraph_line_break(hb_font, text, paragraph, goal_width, variations)?;
 
         paragraphs.extend(line_data);
     }
@@ -240,10 +272,12 @@ fn paragraph_line_break<const N: usize>(
     // first see if the whole paragraph fits in one line
     // for example the Basmala
     if let Ok(l_b) =
-        match find_optimal_line(hb_font, full_text, start_bp, end_bp, goal_width, variations) {
+        match find_optimal_line(hb_font, full_text, (start_bp, end_bp), goal_width, variations) {
             Ok(data) => Ok(data),
             Err(LineError { kind: TooTight, .. }) => Err(ParagraphError::UnableToLayout),
-            Err(LineError { variations, .. }) => Ok(LineData { start_bp, end_bp, variations }),
+            Err(LineError { variations, .. }) => {
+                Ok(LineData::new(start_bp, end_bp, &[], variations))
+            }
         }
     {
         return Ok(vec![l_b]);
@@ -273,7 +307,8 @@ fn paragraph_line_break<const N: usize>(
                 continue;
             }
 
-            match find_optimal_line(hb_font, full_text, start_bp, end_bp, goal_width, variations) {
+            match find_optimal_line(hb_font, full_text, (start_bp, end_bp), goal_width, variations)
+            {
                 Ok(data) => {
                     nodes.insert(end_bp);
                     edges.insert((start_bp, end_bp), data);
@@ -292,7 +327,7 @@ fn paragraph_line_break<const N: usize>(
     .and_then(|(path, _)| {
         path.into_iter()
             .tuple_windows()
-            .map(|key: (_, _)| edges.get(&key).copied())
+            .map(|key: (_, _)| edges.get(&key).cloned())
             .collect::<Option<Vec<_>>>()
     })
     .ok_or(ParagraphError::UnableToLayout)
