@@ -11,9 +11,6 @@ pub struct Variation {
     max: f32,
 
     best: f32,
-
-    /// lower is better.
-    priority: i32,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -24,20 +21,19 @@ pub enum VariationKind {
 
 impl Variation {
     #[must_use]
-    pub fn new_spacing(priority: i32) -> Self {
+    pub fn new_spacing() -> Self {
         Self {
             kind: VariationKind::Spacing,
             min: 0.25, // I dunno
             max: 1.75, // maybe?
             best: 1.0,
             current_value: 1.0,
-            priority,
         }
     }
 
     #[must_use]
-    pub fn new_axis(tag: [u8; 4], min: f32, max: f32, best: f32, priority: i32) -> Self {
-        Self { kind: VariationKind::Axis(tag), min, max, best, current_value: best, priority }
+    pub fn new_axis(tag: [u8; 4], min: f32, max: f32, best: f32) -> Self {
+        Self { kind: VariationKind::Axis(tag), min, max, best, current_value: best }
     }
 
     pub fn set_variations<const N: usize>(
@@ -55,12 +51,15 @@ impl Variation {
         }
 
         hb_font.set_variations(
-            &variations.map(|(tag, value)| hb::Variation::new(&tag, value)).collect_vec(),
+            &variations.map(|(tag, value)| hb::Variation::new(&tag, value)).collect::<Vec<_>>(),
         );
     }
 
-    fn cost(&self) -> usize {
-        f32::abs(self.current_value - self.best).powi(self.priority + 2) as usize
+    // lower priority is lower cost (i.e. better)
+    fn cost(&self, priority: usize) -> usize {
+        // normalizes difference between current_value and best
+        let dif = (self.current_value - self.best) * 100.0 / (self.max - self.min);
+        dif.abs().powi(priority as i32 + 2) as usize
     }
 
     fn change_current_val(&mut self, new_val: f32) {
@@ -89,7 +88,8 @@ impl<const N: usize> LineData<N> {
     fn cost(&self) -> usize {
         self.variations
             .iter()
-            .fold(0, |acc, v| acc + v.cost())
+            .enumerate()
+            .fold(0, |acc, (i, v)| acc + v.cost(i))
             // figuring out the proper cost function is WIP. I hate inserting kashidas
             .saturating_pow(self.kashida_locs.len() as u32 + 1)
     }
@@ -148,41 +148,34 @@ fn find_optimal_line_1_axis<const N: usize>(
     let mut set_slice_to_axis_value = |val: f32| {
         variations[vv_idx].change_current_val(val);
 
-        let hb_variations = variations
-            .iter()
-            .filter_map(|v| match v.kind {
-                VariationKind::Axis(tag) => Some(hb::Variation::new(&tag, v.current_value)),
-                VariationKind::Spacing => None,
-            })
-            .collect::<Vec<_>>();
-        hb_font.set_variations(&hb_variations);
+        hb_font.set_variations(
+            &variations
+                .iter()
+                .filter_map(|v| match v.kind {
+                    VariationKind::Axis(tag) => Some(hb::Variation::new(&tag, v.current_value)),
+                    VariationKind::Spacing => None,
+                })
+                .collect::<Vec<_>>(),
+        );
 
-        let width = match variations.iter().find(|v| matches!(v.kind, VariationKind::Spacing)) {
-            Some(v) => {
-                let space = hb_font.get_nominal_glyph(' ').unwrap();
-                let space_width = hb_font.get_glyph_h_advance(space) as f32 * v.current_value;
+        let buffer = hb::UnicodeBuffer::new().add_str(text_slice);
+        let output = hb::shape(hb_font, buffer, &[]);
 
-                let mut width = -space_width as i32;
-
-                for word in text_slice.split_whitespace() {
-                    let buffer = hb::UnicodeBuffer::new().add_str_item(text_slice, word);
-                    let output = hb::shape(hb_font, buffer, &[]);
-
-                    width += output.get_glyph_positions().iter().map(|p| p.x_advance).sum::<i32>();
-                    width += space_width as i32;
-                }
-
-                width as u32
-            }
-            None => {
-                let buffer = hb::UnicodeBuffer::new().add_str(text_slice);
-                let output = hb::shape(hb_font, buffer, &[]);
-
-                output.get_glyph_positions().iter().map(|p| p.x_advance).sum::<i32>() as u32
-            }
+        let space = hb_font.get_nominal_glyph(' ').unwrap();
+        let space_width = hb_font.get_glyph_h_advance(space);
+        let space_width = match variations.iter().find(|v| matches!(v.kind, VariationKind::Spacing))
+        {
+            Some(v) => (space_width as f32 * v.current_value) as i32,
+            None => space_width,
         };
 
-        // more lenient searching
+        let width = output
+            .get_glyph_positions()
+            .iter()
+            .zip(output.get_glyph_infos())
+            .map(|(p, i)| if i.codepoint == space { space_width } else { p.x_advance })
+            .sum::<i32>() as u32;
+
         if (goal_width.saturating_sub(5)..goal_width.saturating_add(5)).contains(&width) {
             Ordering::Equal
         } else {

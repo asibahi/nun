@@ -127,10 +127,7 @@ fn write_in_image<const N: usize>(
     let space = hb_font.get_nominal_glyph(' ').unwrap();
     let space_width = hb_font.get_glyph_h_advance(space);
     let space_width = match variations.iter().find(|v| matches!(v.kind, VariationKind::Spacing)) {
-        Some(v) => {
-            let w = space_width as f32 * v.current_value;
-            w as i32
-        }
+        Some(v) => (space_width as f32 * v.current_value) as i32,
         None => space_width,
     };
 

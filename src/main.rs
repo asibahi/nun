@@ -25,9 +25,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     let variations = [
-        // nun::Variation::new_spacing(0),
-        nun::Variation::new_axis(*b"MSHQ", 0.0, 100.0, MSHQ_DEFAULT, 0),
-        nun::Variation::new_axis(*b"SPAC", -80.0, 125.0, SPAC_DEFAULT, 1),
+        // nun::Variation::new_spacing(),
+        nun::Variation::new_axis(*b"MSHQ", 0.0, 100.0, MSHQ_DEFAULT),
+        nun::Variation::new_axis(*b"SPAC", -80.0, 125.0, SPAC_DEFAULT),
     ];
 
     nun::run(concat!("texts/", my_file!(), ".txt"), "fonts/Raqq.ttf", variations, config)

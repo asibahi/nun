@@ -669,11 +669,11 @@ dependencies = [
 
 [[package]]
 name = "kashida"
-version = "0.0.6"
+version = "0.0.7"
 dependencies = [
  "hashbrown",
  "icu_segmenter",
- "itertools 0.12.1",
+ "itertools 0.13.0",
  "unicode-joining-type",
 ]
 
