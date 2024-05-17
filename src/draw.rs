@@ -1,4 +1,4 @@
-use crate::logic::{line_break, place_kashidas, Variation};
+use crate::logic::{line_break, Variation, VariationKind};
 use ab_glyph::{self as ab, Font as _, ScaleFont as _};
 use harfbuzz_rs as hb;
 use image::{GenericImageView as _, Rgba, RgbaImage};
@@ -49,17 +49,19 @@ pub fn run<const N: usize>(
     );
 
     for (idx, line) in lines.into_iter().enumerate() {
-        let text_slice =
-            place_kashidas(full_text[line.start_bp..line.end_bp].trim(), &line.kashida_locs);
-
-        Variation::set_variations(line.variations, &mut ab_font, &mut hb_font);
+        let text_slice = kashida::place_kashidas(
+            full_text[line.start_bp..line.end_bp].trim(),
+            &line.kashida_locs,
+            line.kashida_locs.len(),
+        );
 
         write_in_image(
             &text_slice,
             &mut canvas,
             idx,
-            &ab_font,
+            &mut ab_font,
             &mut hb_font,
+            line.variations,
             config,
             ScaledFontData { line_height, scale_factor, ascent, ab_scale },
         );
@@ -110,15 +112,28 @@ struct ScaledFontData {
 }
 
 #[allow(clippy::too_many_arguments)]
-fn write_in_image(
+fn write_in_image<const N: usize>(
     text_slice: &str,
     canvas: &mut RgbaImage,
     line_number: usize,
-    ab_font: &impl ab::Font,
+    ab_font: &mut (impl ab::Font + ab::VariableFont),
     hb_font: &mut hb::Owned<hb::Font<'_>>,
+    variations: [Variation; N],
     ImageConfig { margin, img_width: _, font_size: _, txt_color, bkg_color: _ }: ImageConfig,
     ScaledFontData { line_height, scale_factor, ascent, ab_scale }: ScaledFontData,
 ) {
+    Variation::set_variations(variations, ab_font, hb_font);
+
+    let space = hb_font.get_nominal_glyph(' ').unwrap();
+    let space_width = hb_font.get_glyph_h_advance(space);
+    let space_width = match variations.iter().find(|v| matches!(v.kind, VariationKind::Spacing)) {
+        Some(v) => {
+            let w = space_width as f32 * v.current_value;
+            w as i32
+        }
+        None => space_width,
+    };
+
     let hb_buffer = hb::UnicodeBuffer::new().add_str(text_slice);
     let hb_output = hb::shape(hb_font, hb_buffer, &[]);
 
@@ -126,7 +141,11 @@ fn write_in_image(
         hb_output
             .get_glyph_positions()
             .iter()
-            .map(|p| (p.x_advance as f32 * scale_factor.horizontal))
+            .zip(hb_output.get_glyph_infos())
+            .map(|(p, i)| {
+                let a = if i.codepoint == space { space_width } else { p.x_advance };
+                a as f32 * scale_factor.horizontal
+            })
             .sum::<f32>() as u32,
     ) / 2;
 
@@ -143,12 +162,17 @@ fn write_in_image(
             ),
         );
 
-        caret += position.x_advance;
-
         let Some(outlined_glyph) = ab_font.outline_glyph(gl) else {
-            // gl is whitespace
+            // gl is whitespace?
+            if info.codepoint == space {
+                caret += space_width;
+            } else {
+                caret += position.x_advance;
+            }
             continue;
         };
+
+        caret += position.x_advance;
 
         let bb = outlined_glyph.px_bounds();
         let bbx = (bb.min.x as i32).saturating_add_unsigned(margin + centered_line_offset);

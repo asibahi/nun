@@ -1,10 +1,10 @@
 use harfbuzz_rs as hb;
 use itertools::Itertools as _;
-use std::{borrow::Cow, cmp::Ordering, ops::Not};
+use std::{cmp::Ordering, ops::Not};
 
 #[derive(Clone, Copy, Debug)]
 pub struct Variation {
-    pub tag: [u8; 4],
+    pub kind: VariationKind,
     pub current_value: f32,
 
     min: f32,
@@ -16,10 +16,28 @@ pub struct Variation {
     priority: i32,
 }
 
+#[derive(Clone, Copy, Debug)]
+pub enum VariationKind {
+    Axis([u8; 4]),
+    Spacing,
+}
+
 impl Variation {
     #[must_use]
-    pub fn new(tag: [u8; 4], min: f32, max: f32, best: f32, priority: i32) -> Self {
-        Self { tag, min, max, best, current_value: best, priority }
+    pub fn new_spacing(priority: i32) -> Self {
+        Self {
+            kind: VariationKind::Spacing,
+            min: 0.25, // I dunno
+            max: 1.75, // maybe?
+            best: 1.0,
+            current_value: 1.0,
+            priority,
+        }
+    }
+
+    #[must_use]
+    pub fn new_axis(tag: [u8; 4], min: f32, max: f32, best: f32, priority: i32) -> Self {
+        Self { kind: VariationKind::Axis(tag), min, max, best, current_value: best, priority }
     }
 
     pub fn set_variations<const N: usize>(
@@ -27,11 +45,18 @@ impl Variation {
         ab_font: &mut impl ab_glyph::VariableFont,
         hb_font: &mut hb::Owned<hb::Font<'_>>,
     ) {
-        hb_font.set_variations(&variations.map(|v| hb::Variation::new(&v.tag, v.current_value)));
+        let variations = variations.iter().filter_map(|v| match v.kind {
+            VariationKind::Axis(tag) => Some((tag, v.current_value)),
+            VariationKind::Spacing => None,
+        });
 
-        for v in variations {
-            ab_font.set_variation(&v.tag, v.current_value);
+        for (tag, value) in variations.clone() {
+            ab_font.set_variation(&tag, value);
         }
+
+        hb_font.set_variations(
+            &variations.map(|(tag, value)| hb::Variation::new(&tag, value)).collect_vec(),
+        );
     }
 
     fn cost(&self) -> usize {
@@ -102,18 +127,6 @@ impl<const N: usize> std::fmt::Display for LineError<N> {
     }
 }
 
-pub fn place_kashidas<'a>(text: &'a str, kashida_locs: &'_ [usize]) -> Cow<'a, str> {
-    if kashida_locs.is_empty() {
-        Cow::Borrowed(text)
-    } else {
-        let mut buffer = text.to_owned();
-        for kc in kashida_locs.iter().sorted_by(|a, b| b.cmp(a)) {
-            buffer.insert(*kc, 'ـ');
-        }
-        Cow::Owned(buffer)
-    }
-}
-
 fn find_optimal_line_1_axis<const N: usize>(
     hb_font: &mut hb::Font<'_>,
     text: &str,
@@ -129,22 +142,45 @@ fn find_optimal_line_1_axis<const N: usize>(
 
     let mut search_range = variations[vv_idx].min..variations[vv_idx].max;
 
-    let text_slice = &place_kashidas(text[start_bp..end_bp].trim(), kashida_locs);
+    let text_slice =
+        &kashida::place_kashidas(text[start_bp..end_bp].trim(), kashida_locs, kashida_locs.len());
 
     let mut set_slice_to_axis_value = |val: f32| {
         variations[vv_idx].change_current_val(val);
 
         let hb_variations = variations
             .iter()
-            .map(|v| hb::Variation::new(&v.tag, v.current_value))
+            .filter_map(|v| match v.kind {
+                VariationKind::Axis(tag) => Some(hb::Variation::new(&tag, v.current_value)),
+                VariationKind::Spacing => None,
+            })
             .collect::<Vec<_>>();
-
         hb_font.set_variations(&hb_variations);
 
-        let buffer = hb::UnicodeBuffer::new().add_str(text_slice);
-        let output = hb::shape(hb_font, buffer, &[]);
+        let width = match variations.iter().find(|v| matches!(v.kind, VariationKind::Spacing)) {
+            Some(v) => {
+                let space = hb_font.get_nominal_glyph(' ').unwrap();
+                let space_width = hb_font.get_glyph_h_advance(space) as f32 * v.current_value;
 
-        let width = output.get_glyph_positions().iter().map(|p| p.x_advance).sum::<i32>() as u32;
+                let mut width = -space_width as i32;
+
+                for word in text_slice.split_whitespace() {
+                    let buffer = hb::UnicodeBuffer::new().add_str_item(text_slice, word);
+                    let output = hb::shape(hb_font, buffer, &[]);
+
+                    width += output.get_glyph_positions().iter().map(|p| p.x_advance).sum::<i32>();
+                    width += space_width as i32;
+                }
+
+                width as u32
+            }
+            None => {
+                let buffer = hb::UnicodeBuffer::new().add_str(text_slice);
+                let output = hb::shape(hb_font, buffer, &[]);
+
+                output.get_glyph_positions().iter().map(|p| p.x_advance).sum::<i32>() as u32
+            }
+        };
 
         // more lenient searching
         if (goal_width.saturating_sub(5)..goal_width.saturating_add(5)).contains(&width) {
