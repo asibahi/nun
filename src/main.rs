@@ -100,18 +100,18 @@ fn draw_signature(canvas: &mut RgbaImage) {
     image::imageops::overlay(canvas, &top, MARGIN as i64 / 4, (height - MARGIN) as i64);
 }
 
-fn write_in_image(
+fn write_in_image<const N: usize>(
     full_text: &str,
     canvas: &mut RgbaImage,
     line_number: usize,
     ab_font: &mut (impl ab::Font + ab::VariableFont),
     hb_font: &mut hb::Owned<hb::Font<'_>>,
-    LineData { start_bp, end_bp, kashida_locs, variations }: LineData<2>,
+    LineData { start_bp, end_bp, kashida_locs, variations }: LineData<N>,
 ) {
     nun::Variation::set_variations(variations, ab_font, hb_font);
 
     let text_slice = nun::place_kashidas(full_text[start_bp..end_bp].trim(), &kashida_locs);
-   
+
     let hb_buffer = hb::UnicodeBuffer::new().add_str(&text_slice);
     let hb_output = hb::shape(hb_font, hb_buffer, &[]);
 
