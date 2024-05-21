@@ -24,8 +24,8 @@ impl Variation {
     pub fn new_spacing() -> Self {
         Self {
             kind: VariationKind::Spacing,
-            min: 0.0,  // I dunno
-            max: 20.0, // maybe?
+            min: 0.0, // I dunno
+            max: 2.0, // maybe?
             best: 1.0,
             current_value: 1.0,
         }
@@ -80,12 +80,9 @@ impl<const N: usize> LineData<N> {
     }
 
     fn cost(&self) -> usize {
-        self.variations
-            .iter()
-            .enumerate()
-            .fold(0, |acc, (i, v)| acc + v.cost(i))
-            // figuring out the proper cost function is WIP. I hate inserting kashidas
-            // .saturating_pow(self.kashida_locs.len() as u32 + 1)
+        self.variations.iter().enumerate().fold(0, |acc, (i, v)| acc + v.cost(i))
+        // figuring out the proper cost function is WIP. I hate inserting kashidas
+        // .saturating_pow(self.kashida_locs.len() as u32 + 1)
     }
 }
 
@@ -121,6 +118,56 @@ impl<const N: usize> std::fmt::Display for LineError<N> {
     }
 }
 
+#[allow(dead_code)]
+pub(crate) struct GlyphData {
+    pub codepoint: u32,
+    pub cluster: u32,
+    pub x_advance: i32,
+    pub y_advance: i32,
+    pub x_offset: i32,
+    pub y_offset: i32,
+}
+
+pub(crate) fn shape_text<const N: usize>(
+    hb_font: &mut hb::Font<'_>,
+    text_slice: &str,
+    variations: [Variation; N],
+) -> Vec<GlyphData> {
+    hb_font.set_variations(
+        &variations
+            .iter()
+            .filter_map(|v| match v.kind {
+                VariationKind::Axis(tag) => Some(hb::Variation::new(&tag, v.current_value)),
+                VariationKind::Spacing => None,
+            })
+            .collect::<Vec<_>>(),
+    );
+
+    let buffer = hb::UnicodeBuffer::new().add_str(text_slice);
+    let output = hb::shape(hb_font, buffer, &[]);
+
+    let space = hb_font.get_nominal_glyph(' ').unwrap();
+    let space_width = hb_font.get_glyph_h_advance(space);
+    let space_width = match variations.iter().find(|v| matches!(v.kind, VariationKind::Spacing)) {
+        Some(v) => (space_width as f32 * v.current_value) as i32,
+        None => space_width,
+    };
+
+    output
+        .get_glyph_infos()
+        .iter()
+        .zip(output.get_glyph_positions())
+        .map(|(i, p)| GlyphData {
+            codepoint: i.codepoint,
+            cluster: i.cluster,
+            x_advance: if i.codepoint == space { space_width } else { p.x_advance },
+            y_advance: p.y_advance,
+            x_offset: p.x_offset,
+            y_offset: p.y_advance,
+        })
+        .collect()
+}
+
 fn find_optimal_line_1_axis<const N: usize>(
     hb_font: &mut hb::Font<'_>,
     text: &str,
@@ -140,33 +187,9 @@ fn find_optimal_line_1_axis<const N: usize>(
     let mut set_slice_to_axis_value = |val: f32| {
         variations[vv_idx].change_current_val(val);
 
-        hb_font.set_variations(
-            &variations
-                .iter()
-                .filter_map(|v| match v.kind {
-                    VariationKind::Axis(tag) => Some(hb::Variation::new(&tag, v.current_value)),
-                    VariationKind::Spacing => None,
-                })
-                .collect::<Vec<_>>(),
-        );
+        let shaped_text = shape_text(hb_font, text_slice, variations);
 
-        let buffer = hb::UnicodeBuffer::new().add_str(text_slice);
-        let output = hb::shape(hb_font, buffer, &[]);
-
-        let space = hb_font.get_nominal_glyph(' ').unwrap();
-        let space_width = hb_font.get_glyph_h_advance(space);
-        let space_width = match variations.iter().find(|v| matches!(v.kind, VariationKind::Spacing))
-        {
-            Some(v) => (space_width as f32 * v.current_value) as i32,
-            None => space_width,
-        };
-
-        let width = output
-            .get_glyph_positions()
-            .iter()
-            .zip(output.get_glyph_infos())
-            .map(|(p, i)| if i.codepoint == space { space_width } else { p.x_advance })
-            .sum::<i32>() as u32;
+        let width = shaped_text.iter().map(|g| g.x_advance).sum::<i32>() as u32;
 
         if (goal_width.saturating_sub(5)..goal_width.saturating_add(5)).contains(&width) {
             Ordering::Equal
@@ -176,13 +199,13 @@ fn find_optimal_line_1_axis<const N: usize>(
     };
 
     match set_slice_to_axis_value(search_range.start) {
-        Ordering::Greater => return Err(LineError::new(TooTight,  variations)),
+        Ordering::Greater => return Err(LineError::new(TooTight, variations)),
         Ordering::Equal => return Ok(LineData { variations, ..ret }),
         Ordering::Less => (),
     }
 
     match set_slice_to_axis_value(search_range.end) {
-        Ordering::Less => return Err(LineError::new(TooLoose,  variations)),
+        Ordering::Less => return Err(LineError::new(TooLoose, variations)),
         Ordering::Equal => return Ok(LineData { variations, ..ret }),
         Ordering::Greater => (),
     }
@@ -284,9 +307,7 @@ fn paragraph_line_break<const N: usize>(
         match find_optimal_line(hb_font, full_text, (start_bp, end_bp), goal_width, variations) {
             Ok(data) => Ok(data),
             Err(LineError { kind: TooTight, .. }) => Err(ParagraphError::UnableToLayout),
-            Err(LineError { variations,  .. }) => {
-                Ok(LineData::new(start_bp, end_bp,variations))
-            }
+            Err(LineError { variations, .. }) => Ok(LineData::new(start_bp, end_bp, variations)),
         }
     {
         return Ok(vec![l_b]);
