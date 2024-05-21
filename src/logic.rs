@@ -24,8 +24,8 @@ impl Variation {
     pub fn new_spacing() -> Self {
         Self {
             kind: VariationKind::Spacing,
-            min: 0.25, // I dunno
-            max: 1.75, // maybe?
+            min: 0.0,  // I dunno
+            max: 20.0, // maybe?
             best: 1.0,
             current_value: 1.0,
         }
@@ -71,18 +71,12 @@ impl Variation {
 pub struct LineData<const N: usize> {
     pub start_bp: usize,
     pub end_bp: usize,
-    pub kashida_locs: Box<[usize]>,
     pub variations: [Variation; N],
 }
 
 impl<const N: usize> LineData<N> {
-    pub fn new(
-        start_bp: usize,
-        end_bp: usize,
-        kashida_locs: &[usize],
-        variations: [Variation; N],
-    ) -> Self {
-        Self { start_bp, end_bp, kashida_locs: kashida_locs.into(), variations }
+    pub fn new(start_bp: usize, end_bp: usize, variations: [Variation; N]) -> Self {
+        Self { start_bp, end_bp, variations }
     }
 
     fn cost(&self) -> usize {
@@ -91,7 +85,7 @@ impl<const N: usize> LineData<N> {
             .enumerate()
             .fold(0, |acc, (i, v)| acc + v.cost(i))
             // figuring out the proper cost function is WIP. I hate inserting kashidas
-            .saturating_pow(self.kashida_locs.len() as u32 + 1)
+            // .saturating_pow(self.kashida_locs.len() as u32 + 1)
     }
 }
 
@@ -107,13 +101,12 @@ use LineErrorKind::{TooLoose, TooTight};
 #[derive(Debug)]
 struct LineError<const N: usize> {
     kind: LineErrorKind,
-    kashida_locs: Box<[usize]>,
     variations: [Variation; N],
 }
 
 impl<const N: usize> LineError<N> {
-    fn new(kind: LineErrorKind, kashida_locs: &[usize], variations: [Variation; N]) -> Self {
-        Self { kind, variations, kashida_locs: kashida_locs.into() }
+    fn new(kind: LineErrorKind, variations: [Variation; N]) -> Self {
+        Self { kind, variations }
     }
 }
 impl<const N: usize> std::error::Error for LineError<N> {}
@@ -133,18 +126,16 @@ fn find_optimal_line_1_axis<const N: usize>(
     text: &str,
     (start_bp, end_bp): (usize, usize),
     goal_width: u32,
-    kashida_locs: &[usize],
     vv_idx: usize,
     mut variations: [Variation; N],
 ) -> Result<LineData<N>, LineError<N>> {
     assert!(vv_idx < N, "Index should be within the variations array");
 
-    let ret = LineData::new(start_bp, end_bp, kashida_locs, variations);
+    let ret = LineData::new(start_bp, end_bp, variations);
 
     let mut search_range = variations[vv_idx].min..variations[vv_idx].max;
 
-    let text_slice =
-        &kashida::place_kashidas(text[start_bp..end_bp].trim(), kashida_locs, kashida_locs.len());
+    let text_slice = text[start_bp..end_bp].trim();
 
     let mut set_slice_to_axis_value = |val: f32| {
         variations[vv_idx].change_current_val(val);
@@ -185,13 +176,13 @@ fn find_optimal_line_1_axis<const N: usize>(
     };
 
     match set_slice_to_axis_value(search_range.start) {
-        Ordering::Greater => return Err(LineError::new(TooTight, kashida_locs, variations)),
+        Ordering::Greater => return Err(LineError::new(TooTight,  variations)),
         Ordering::Equal => return Ok(LineData { variations, ..ret }),
         Ordering::Less => (),
     }
 
     match set_slice_to_axis_value(search_range.end) {
-        Ordering::Less => return Err(LineError::new(TooLoose, kashida_locs, variations)),
+        Ordering::Less => return Err(LineError::new(TooLoose,  variations)),
         Ordering::Equal => return Ok(LineData { variations, ..ret }),
         Ordering::Greater => (),
     }
@@ -226,38 +217,25 @@ fn find_optimal_line<const N: usize>(
 ) -> Result<LineData<N>, LineError<N>> {
     assert!(N > 0);
 
-    let kashida_locs =
-        kashida::find_kashidas(&full_text[start_bp..end_bp], kashida::Script::Arabic);
+    for (idx, counter) in (0..N).rev().enumerate() {
+        let attempt = find_optimal_line_1_axis(
+            hb_font,
+            full_text,
+            (start_bp, end_bp),
+            goal_width,
+            idx,
+            variations,
+        );
 
-    let mut inner = |k| {
-        for (idx, counter) in (0..N).rev().enumerate() {
-            let attempt = find_optimal_line_1_axis(
-                hb_font,
-                full_text,
-                (start_bp, end_bp),
-                goal_width,
-                &kashida_locs[0..k],
-                idx,
-                variations,
-            );
-
-            variations = match (attempt, counter) {
-                (result @ Ok(_), _) | (result @ Err(_), 0) => return result,
-                (Err(LineError { variations, .. }), _) => variations,
-            };
-        }
-
-        unreachable!("Inner optimal line loop always runs");
-    };
-
-    for (k, counter) in (0..=kashida_locs.len()).rev().enumerate() {
-        match (inner(k), counter) {
-            (result @ Ok(_), _) | (result @ Err(_), 0) => return result,
-            (Err(v), _) => {dbg!(v);},
-        }
+        variations = match (attempt, counter) {
+            (result @ Ok(_), _)
+            | (result @ Err(LineError { kind: TooTight, .. }), _)
+            | (result @ Err(_), 0) => return result,
+            (Err(LineError { variations, .. }), _) => variations,
+        };
     }
 
-    unreachable!("Outer optimal line loop always runs");
+    unreachable!("Inner optimal line loop always runs");
 }
 
 #[derive(Debug)]
@@ -306,8 +284,8 @@ fn paragraph_line_break<const N: usize>(
         match find_optimal_line(hb_font, full_text, (start_bp, end_bp), goal_width, variations) {
             Ok(data) => Ok(data),
             Err(LineError { kind: TooTight, .. }) => Err(ParagraphError::UnableToLayout),
-            Err(LineError { variations, kashida_locs, .. }) => {
-                Ok(LineData::new(start_bp, end_bp, &kashida_locs, variations))
+            Err(LineError { variations,  .. }) => {
+                Ok(LineData::new(start_bp, end_bp,variations))
             }
         }
     {

@@ -1,6 +1,6 @@
 macro_rules! my_file {
     () => {
-        "noor"
+        "kursi"
     };
 }
 

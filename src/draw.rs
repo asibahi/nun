@@ -49,14 +49,10 @@ pub fn run<const N: usize>(
     );
 
     for (idx, line) in lines.into_iter().enumerate() {
-        let text_slice = kashida::place_kashidas(
-            full_text[line.start_bp..line.end_bp].trim(),
-            &line.kashida_locs,
-            line.kashida_locs.len(),
-        );
+        let text_slice = full_text[line.start_bp..line.end_bp].trim();
 
         write_in_image(
-            &text_slice,
+            text_slice,
             &mut canvas,
             idx,
             &mut ab_font,
@@ -123,6 +119,8 @@ fn write_in_image<const N: usize>(
     ScaledFontData { line_height, scale_factor, ascent, ab_scale }: ScaledFontData,
 ) {
     Variation::set_variations(variations, ab_font, hb_font);
+
+    println!("{text_slice}");
 
     let space = hb_font.get_nominal_glyph(' ').unwrap();
     let space_width = hb_font.get_glyph_h_advance(space);
