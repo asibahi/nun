@@ -106,13 +106,14 @@ use LineErrorKind::{TooLoose, TooTight};
 
 #[derive(Debug)]
 struct LineError<const N: usize> {
-    variations: [Variation; N],
     kind: LineErrorKind,
+    kashida_locs: Box<[usize]>,
+    variations: [Variation; N],
 }
 
 impl<const N: usize> LineError<N> {
-    fn new(kind: LineErrorKind, variations: [Variation; N]) -> Self {
-        Self { variations, kind }
+    fn new(kind: LineErrorKind, kashida_locs: &[usize], variations: [Variation; N]) -> Self {
+        Self { kind, variations, kashida_locs: kashida_locs.into() }
     }
 }
 impl<const N: usize> std::error::Error for LineError<N> {}
@@ -184,13 +185,13 @@ fn find_optimal_line_1_axis<const N: usize>(
     };
 
     match set_slice_to_axis_value(search_range.start) {
-        Ordering::Greater => return Err(LineError::new(TooTight, variations)),
+        Ordering::Greater => return Err(LineError::new(TooTight, kashida_locs, variations)),
         Ordering::Equal => return Ok(LineData { variations, ..ret }),
         Ordering::Less => (),
     }
 
     match set_slice_to_axis_value(search_range.end) {
-        Ordering::Less => return Err(LineError::new(TooLoose, variations)),
+        Ordering::Less => return Err(LineError::new(TooLoose, kashida_locs, variations)),
         Ordering::Equal => return Ok(LineData { variations, ..ret }),
         Ordering::Greater => (),
     }
@@ -252,7 +253,7 @@ fn find_optimal_line<const N: usize>(
     for (k, counter) in (0..=kashida_locs.len()).rev().enumerate() {
         match (inner(k), counter) {
             (result @ Ok(_), _) | (result @ Err(_), 0) => return result,
-            (Err(_), _) => (),
+            (Err(v), _) => {dbg!(v);},
         }
     }
 
@@ -305,8 +306,8 @@ fn paragraph_line_break<const N: usize>(
         match find_optimal_line(hb_font, full_text, (start_bp, end_bp), goal_width, variations) {
             Ok(data) => Ok(data),
             Err(LineError { kind: TooTight, .. }) => Err(ParagraphError::UnableToLayout),
-            Err(LineError { variations, .. }) => {
-                Ok(LineData::new(start_bp, end_bp, &[], variations))
+            Err(LineError { variations, kashida_locs, .. }) => {
+                Ok(LineData::new(start_bp, end_bp, &kashida_locs, variations))
             }
         }
     {
