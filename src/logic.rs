@@ -177,7 +177,7 @@ pub(crate) fn shape_text<const N: usize>(
             x_advance: if i.codepoint == space { space_width } else { p.x_advance },
             y_advance: p.y_advance,
             x_offset: p.x_offset,
-            y_offset: p.y_advance,
+            y_offset: p.y_offset,
         })
         .collect()
 }
