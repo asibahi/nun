@@ -18,6 +18,7 @@ imageproc = "0.25"
 itertools = "0.13"
 pathfinding = "4.9.1"
 resvg = "0.41.0"
+kashida = { path = "../kashida/" } # local repo to allow for iteration
 
 [lints.clippy]
 filter_map_bool_then = "allow"

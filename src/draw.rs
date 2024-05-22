@@ -49,10 +49,14 @@ pub fn run<const N: usize>(
     );
 
     for (idx, line) in lines.into_iter().enumerate() {
-        let text_slice = full_text[line.start_bp..line.end_bp].trim();
+        let text_slice = {
+            let t = full_text[line.start_bp..line.end_bp].trim();
+            let c = kashida::find_kashidas(t, kashida::Script::Arabic);
+            kashida::place_kashidas(t, &c, line.kashida_count)
+        };
 
         write_in_image(
-            text_slice,
+            &text_slice,
             &mut canvas,
             idx,
             &mut ab_font,
@@ -130,8 +134,7 @@ fn write_in_image<const N: usize>(
     let mut caret = 0;
     let mut colored_glyphs = vec![];
 
-    for glyph in shaped_text
-    {
+    for glyph in shaped_text {
         let gl = ab::GlyphId(glyph.codepoint as u16).with_scale_and_position(
             ab_scale,
             ab::point(
