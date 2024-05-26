@@ -15,6 +15,9 @@ const _OFF_BLACK: [u8; 4] = [0x20, 0x20, 0x20, 0xFF];
 const _MSHQ_DEFAULT: f32 = 25.0;
 const _SPAC_DEFAULT: f32 = 0.0;
 
+const _RAQQ : &str = "fonts/Raqq.ttf";
+const _NOTO : &str = "fonts/NotoArabic.ttf";
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config = nun::ImageConfig {
         margin: FACTOR * 100,
@@ -25,10 +28,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     let variations = [
-        nun::Variation::new_spacing(),
-        // nun::Variation::new_axis(*b"MSHQ", 0.0, 100.0, _MSHQ_DEFAULT),
-        // nun::Variation::new_axis(*b"SPAC", -80.0, 125.0, _SPAC_DEFAULT),
+        // nun::Variation::new_spacing(),
+        nun::Variation::new_axis(*b"MSHQ", 0.0, 100.0, _MSHQ_DEFAULT),
+        nun::Variation::new_axis(*b"SPAC", -80.0, 125.0, _SPAC_DEFAULT),
     ];
 
-    nun::run(concat!("texts/", my_file!(), ".txt"), "fonts/NotoArabic.ttf", variations, config)
+    nun::run(concat!("texts/", my_file!(), ".txt"), _RAQQ, variations, config)
 }
