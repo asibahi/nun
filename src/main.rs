@@ -1,6 +1,6 @@
 macro_rules! my_file {
     () => {
-        "noor"
+        "kursi"
     };
 }
 
@@ -12,8 +12,11 @@ const _BLACK: [u8; 4] = [0x0A, 0x0A, 0x0A, 0xFF];
 const _OFF_WHITE: [u8; 4] = [0xFF, 0xFF, 0xF2, 0xFF];
 const _OFF_BLACK: [u8; 4] = [0x20, 0x20, 0x20, 0xFF];
 
-const MSHQ_DEFAULT: f32 = 25.0;
-const SPAC_DEFAULT: f32 = 0.0;
+const _MSHQ_DEFAULT: f32 = 25.0;
+const _SPAC_DEFAULT: f32 = 0.0;
+
+const _RAQQ : &str = "fonts/Raqq.ttf";
+const _NOTO : &str = "fonts/NotoArabic.ttf";
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config = nun::ImageConfig {
@@ -25,10 +28,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     let variations = [
-        // nun::Variation::new_spacing(0),
-        nun::Variation::new_axis(*b"MSHQ", 0.0, 100.0, MSHQ_DEFAULT, 0),
-        nun::Variation::new_axis(*b"SPAC", -80.0, 125.0, SPAC_DEFAULT, 1),
+        // nun::Variation::new_spacing(),
+        nun::Variation::new_axis(*b"MSHQ", 0.0, 100.0, _MSHQ_DEFAULT),
+        nun::Variation::new_axis(*b"SPAC", -80.0, 125.0, _SPAC_DEFAULT),
     ];
 
-    nun::run(concat!("texts/", my_file!(), ".txt"), "fonts/Raqq.ttf", variations, config)
+    nun::run(concat!("texts/", my_file!(), ".txt"), _RAQQ, variations, config)
 }

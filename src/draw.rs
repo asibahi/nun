@@ -1,4 +1,4 @@
-use crate::logic::{line_break, Variation, VariationKind};
+use crate::logic::{line_break, shape_text, Variation};
 use ab_glyph::{self as ab, Font as _, ScaleFont as _};
 use harfbuzz_rs as hb;
 use image::{GenericImageView as _, Rgba, RgbaImage};
@@ -49,11 +49,11 @@ pub fn run<const N: usize>(
     );
 
     for (idx, line) in lines.into_iter().enumerate() {
-        let text_slice = kashida::place_kashidas(
-            full_text[line.start_bp..line.end_bp].trim(),
-            &line.kashida_locs,
-            line.kashida_locs.len(),
-        );
+        let text_slice = {
+            let t = full_text[line.start_bp..line.end_bp].trim();
+            let c = kashida::find_kashidas(t, kashida::Script::Arabic);
+            kashida::place_kashidas(t, &c, line.kashida_count)
+        };
 
         write_in_image(
             &text_slice,
@@ -124,63 +124,38 @@ fn write_in_image<const N: usize>(
 ) {
     Variation::set_variations(variations, ab_font, hb_font);
 
-    let space = hb_font.get_nominal_glyph(' ').unwrap();
-    let space_width = hb_font.get_glyph_h_advance(space);
-    let space_width = match variations.iter().find(|v| matches!(v.kind, VariationKind::Spacing)) {
-        Some(v) => {
-            let w = space_width as f32 * v.current_value;
-            w as i32
-        }
-        None => space_width,
-    };
-
-    let hb_buffer = hb::UnicodeBuffer::new().add_str(text_slice);
-    let hb_output = hb::shape(hb_font, hb_buffer, &[]);
+    let shaped_text = shape_text(hb_font, text_slice, variations);
 
     let centered_line_offset = (canvas.width() - 2 * margin).saturating_sub(
-        hb_output
-            .get_glyph_positions()
-            .iter()
-            .zip(hb_output.get_glyph_infos())
-            .map(|(p, i)| {
-                let a = if i.codepoint == space { space_width } else { p.x_advance };
-                a as f32 * scale_factor.horizontal
-            })
-            .sum::<f32>() as u32,
+        shaped_text.iter().map(|g| g.x_advance as f32 * scale_factor.horizontal).sum::<f32>()
+            as u32,
     ) / 2;
 
     let mut caret = 0;
     let mut colored_glyphs = vec![];
 
-    for (position, info) in hb_output.get_glyph_positions().iter().zip(hb_output.get_glyph_infos())
-    {
-        let gl = ab::GlyphId(info.codepoint as u16).with_scale_and_position(
+    for glyph in shaped_text {
+        let gl = ab::GlyphId(glyph.codepoint as u16).with_scale_and_position(
             ab_scale,
             ab::point(
-                (caret + position.x_offset) as f32 * scale_factor.horizontal,
-                ascent - (position.y_offset as f32 * scale_factor.vertical),
+                (caret + glyph.x_offset) as f32 * scale_factor.horizontal,
+                ascent - (glyph.y_offset as f32 * scale_factor.vertical),
             ),
         );
 
+        caret += glyph.x_advance;
         let Some(outlined_glyph) = ab_font.outline_glyph(gl) else {
             // gl is whitespace?
-            if info.codepoint == space {
-                caret += space_width;
-            } else {
-                caret += position.x_advance;
-            }
             continue;
         };
-
-        caret += position.x_advance;
 
         let bb = outlined_glyph.px_bounds();
         let bbx = (bb.min.x as i32).saturating_add_unsigned(margin + centered_line_offset);
         let bby =
             (bb.min.y as i32).saturating_add_unsigned(margin + line_number as u32 * line_height);
         if let Some(colored_glyph) = ab_font
-            .glyph_svg_image(ab::GlyphId(info.codepoint as u16))
-            .and_then(|svg| svg_data_to_glyph(svg.data, bb, info.codepoint))
+            .glyph_svg_image(ab::GlyphId(glyph.codepoint as u16))
+            .and_then(|svg| svg_data_to_glyph(svg.data, bb, glyph.codepoint))
         {
             colored_glyphs.push((bbx, bby, colored_glyph));
         } else {
