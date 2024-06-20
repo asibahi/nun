@@ -84,9 +84,7 @@ fn draw_signature(canvas: &mut RgbaImage) {
     let (_, height) = canvas.dimensions();
 
     static STAMP_SVG: &str = include_str!("../personal_stamp.svg");
-    let tree =
-        usvg::Tree::from_str(STAMP_SVG, &usvg::Options::default(), &usvg::fontdb::Database::new())
-            .unwrap();
+    let tree = usvg::Tree::from_str(STAMP_SVG, &usvg::Options::default()).unwrap();
 
     let size = tree.size().to_int_size();
     let mut pixmap = Pixmap::new(size.width(), size.height()).unwrap();
@@ -182,9 +180,7 @@ fn write_in_image(
 }
 
 fn svg_data_to_glyph(data: &[u8], bb: ab::Rect, codepoint: u32) -> Option<RgbaImage> {
-    let tree =
-        usvg::Tree::from_data(data, &usvg::Options::default(), &usvg::fontdb::Database::new())
-            .ok()?;
+    let tree = usvg::Tree::from_data(data, &usvg::Options::default()).ok()?;
     let node = tree.node_by_id(&format!("glyph{codepoint}"))?;
     let size = node.abs_layer_bounding_box()?;
     let transform =

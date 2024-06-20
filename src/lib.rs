@@ -31,12 +31,10 @@ impl Variation {
         ab_font: &mut impl ab_glyph::VariableFont,
         rb_font: &mut rb::Face<'_>,
     ) {
-        rb_font.set_variations(
-            &variations.map(|v| rb::Variation {
-                tag: rb::Tag::from_bytes(&v.tag),
-                value: v.current_value,
-            }),
-        );
+        rb_font.set_variations(&variations.map(|v| rb::Variation {
+            tag: rb::ttf_parser::Tag::from_bytes(&v.tag),
+            value: v.current_value,
+        }));
 
         for v in variations {
             ab_font.set_variation(&v.tag, v.current_value);
@@ -115,8 +113,8 @@ fn find_optimal_line_1_axis(
 
     let mut set_slice_to_axis_value = |value: f32| {
         rb_font.set_variations(&[
-            rb::Variation { tag: rb::Tag::from_bytes(&variable_variation.tag), value },
-            rb::Variation { tag: rb::Tag::from_bytes(&fixed_variation.tag), value },
+            rb::Variation { tag: rb::ttf_parser::Tag::from_bytes(&variable_variation.tag), value },
+            rb::Variation { tag: rb::ttf_parser::Tag::from_bytes(&fixed_variation.tag), value },
         ]);
 
         let mut buffer = rb::UnicodeBuffer::new();
