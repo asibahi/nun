@@ -257,7 +257,7 @@ fn find_optimal_line<const N: usize>(
     goal_width: u32,
     variations: [Variation; N],
 ) -> Result<LineData<N>, LineError<N>> {
-    assert!(N > 0);
+    const { assert!(N > 0) }
 
     let mut inner = |k| {
         let mut variations = variations;
