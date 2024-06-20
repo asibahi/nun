@@ -15,8 +15,8 @@ const _OFF_BLACK: [u8; 4] = [0x20, 0x20, 0x20, 0xFF];
 const _MSHQ_DEFAULT: f32 = 25.0;
 const _SPAC_DEFAULT: f32 = 0.0;
 
-const _RAQQ : &str = "fonts/Raqq.ttf";
-const _NOTO : &str = "fonts/NotoArabic.ttf";
+const _RAQQ: &str = "fonts/Raqq.ttf";
+const _NOTO: &str = "fonts/NotoArabic.ttf";
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config = nun::ImageConfig {

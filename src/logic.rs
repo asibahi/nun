@@ -36,25 +36,6 @@ impl Variation {
         Self { kind: VariationKind::Axis(tag), min, max, best, current_value: best }
     }
 
-    pub fn set_variations<const N: usize>(
-        variations: [Variation; N],
-        ab_font: &mut impl ab_glyph::VariableFont,
-        hb_font: &mut hb::Owned<hb::Font<'_>>,
-    ) {
-        let variations = variations.iter().filter_map(|v| match v.kind {
-            VariationKind::Axis(tag) => Some((tag, v.current_value)),
-            VariationKind::Spacing => None,
-        });
-
-        for (tag, value) in variations.clone() {
-            ab_font.set_variation(&tag, value);
-        }
-
-        hb_font.set_variations(
-            &variations.map(|(tag, value)| hb::Variation::new(&tag, value)).collect::<Vec<_>>(),
-        );
-    }
-
     // lower priority is lower cost (i.e. better)
     fn cost(&self, priority: usize) -> usize {
         // normalizes difference between current_value and best
@@ -189,7 +170,7 @@ fn find_optimal_line_1_axis<const N: usize>(
     goal_width: u32,
     vv_idx: usize,
     mut variations: [Variation; N],
-    kashida_count: usize,
+    (kashida_locs, kashida_count): (&[usize], usize),
 ) -> Result<LineData<N>, LineError<N>> {
     assert!(vv_idx < N, "Index should be within the variations array");
 
@@ -197,11 +178,8 @@ fn find_optimal_line_1_axis<const N: usize>(
 
     let mut search_range = variations[vv_idx].min..variations[vv_idx].max;
 
-    let text_slice = {
-        let t = text[start_bp..end_bp].trim();
-        let c = kashida::find_kashidas(t, kashida::Script::Arabic);
-        kashida::place_kashidas(t, &c, kashida_count)
-    };
+    let text_slice = // if kashida_locs is empty this is a noop.
+        kashida::place_kashidas(text[start_bp..end_bp].trim(), kashida_locs, kashida_count);
 
     let mut set_slice_to_axis_value = |val: f32| {
         variations[vv_idx].change_current_val(val);
@@ -256,6 +234,7 @@ fn find_optimal_line<const N: usize>(
     (start_bp, end_bp): (usize, usize),
     goal_width: u32,
     variations: [Variation; N],
+    kashida: bool,
 ) -> Result<LineData<N>, LineError<N>> {
     const { assert!(N > 0) }
 
@@ -283,19 +262,22 @@ fn find_optimal_line<const N: usize>(
         unreachable!("Inner optimal line loop always runs");
     };
 
-    let c =
-        kashida::find_kashidas(full_text[start_bp..end_bp].trim(), kashida::Script::Arabic).len();
-
-    for (k, counter) in (0..=c * 20).rev().enumerate() {
-        match (inner(k), counter) {
-            (result @ Ok(_), _)
-            | (result @ Err(LineError { kind: TooTight, .. }), _)
-            | (result @ Err(_), 0) => return result,
-            (Err(_), _) => (),
+    if kashida {
+        let locs =
+            kashida::find_kashidas(full_text[start_bp..end_bp].trim(), kashida::Script::Arabic);
+        for (k, counter) in (0..=locs.len() * 20).rev().enumerate() {
+            match (inner((&locs, k)), counter) {
+                (result @ Ok(_), _)
+                | (result @ Err(LineError { kind: TooTight, .. }), _)
+                | (result @ Err(_), 0) => return result,
+                (Err(_), _) => (),
+            }
         }
-    }
 
-    inner(0)
+        unreachable!()
+    } else {
+        inner((&[], 0))
+    }
 }
 
 #[derive(Debug)]
@@ -320,9 +302,14 @@ pub fn line_break<const N: usize>(
     let mut paragraphs = vec![];
 
     for paragraph in text.split("\n\n") {
-        let line_data = paragraph_line_break(hb_font, text, paragraph, goal_width, variations)?;
-
-        paragraphs.extend(line_data);
+        let line_data = if let Ok(line_data) =
+            paragraph_line_break(hb_font, text, paragraph, goal_width, variations, false)
+        {
+            line_data
+        } else {
+            paragraph_line_break(hb_font, text, paragraph, goal_width, variations, true)?
+        };
+        paragraphs.extend(line_data)
     }
 
     Ok(paragraphs)
@@ -334,21 +321,27 @@ fn paragraph_line_break<const N: usize>(
     paragraph: &str,
     goal_width: u32,
     variations: [Variation; N],
+    kashida: bool,
 ) -> Result<Vec<LineData<N>>, ParagraphError> {
     let start_bp = paragraph.as_ptr() as usize - full_text.as_ptr() as usize;
     let end_bp = start_bp + paragraph.as_bytes().len();
 
     // first see if the whole paragraph fits in one line
     // for example the Basmala
-    if let Ok(l_b) =
-        match find_optimal_line(hb_font, full_text, (start_bp, end_bp), goal_width, variations) {
-            Ok(data) => Ok(data),
-            Err(LineError { kind: TooTight, .. }) => Err(ParagraphError::UnableToLayout),
-            Err(LineError { variations, kashida_count, .. }) => {
-                Ok(LineData::new(start_bp, end_bp, variations, kashida_count))
-            }
+    if let Ok(l_b) = match find_optimal_line(
+        hb_font,
+        full_text,
+        (start_bp, end_bp),
+        goal_width,
+        variations,
+        true,
+    ) {
+        Ok(data) => Ok(data),
+        Err(LineError { kind: TooTight, .. }) => Err(ParagraphError::UnableToLayout),
+        Err(LineError { variations, kashida_count, .. }) => {
+            Ok(LineData::new(start_bp, end_bp, variations, kashida_count))
         }
-    {
+    } {
         return Ok(vec![l_b]);
     }
 
@@ -376,8 +369,14 @@ fn paragraph_line_break<const N: usize>(
                 continue;
             }
 
-            match find_optimal_line(hb_font, full_text, (start_bp, end_bp), goal_width, variations)
-            {
+            match find_optimal_line(
+                hb_font,
+                full_text,
+                (start_bp, end_bp),
+                goal_width,
+                variations,
+                kashida,
+            ) {
                 Ok(data) => {
                     nodes.insert(end_bp);
                     edges.insert((start_bp, end_bp), data);

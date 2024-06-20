@@ -1,4 +1,4 @@
-use crate::logic::{line_break, shape_text, Variation};
+use crate::logic::{line_break, shape_text, Variation, VariationKind};
 use ab_glyph::{self as ab, Font as _, ScaleFont as _};
 use harfbuzz_rs as hb;
 use image::{GenericImageView as _, Rgba, RgbaImage};
@@ -83,11 +83,7 @@ fn draw_signature(canvas: &mut RgbaImage, margin: u32) -> Result<(), Box<dyn std
     let (_, height) = canvas.dimensions();
 
     let stamp_svg = std::fs::read_to_string("personal_stamp.svg")?;
-    let tree = usvg::Tree::from_str(
-        &stamp_svg,
-        &usvg::Options::default(),
-        &usvg::fontdb::Database::new(),
-    )?;
+    let tree = usvg::Tree::from_str(&stamp_svg, &usvg::Options::default())?;
 
     let size = tree.size().to_int_size();
     let mut pixmap = Pixmap::new(size.width(), size.height()).ok_or("")?;
@@ -122,7 +118,15 @@ fn write_in_image<const N: usize>(
     ImageConfig { margin, img_width: _, font_size: _, txt_color, bkg_color: _ }: ImageConfig,
     ScaledFontData { line_height, scale_factor, ascent, ab_scale }: ScaledFontData,
 ) {
-    Variation::set_variations(variations, ab_font, hb_font);
+    variations
+        .iter()
+        .filter_map(|v| match v.kind {
+            VariationKind::Axis(tag) => Some((tag, v.current_value)),
+            VariationKind::Spacing => None,
+        })
+        .for_each(|(tag, value)| {
+            ab_font.set_variation(&tag, value);
+        });
 
     let shaped_text = shape_text(hb_font, text_slice, variations);
 
@@ -180,9 +184,7 @@ fn write_in_image<const N: usize>(
 }
 
 fn svg_data_to_glyph(data: &[u8], bb: ab::Rect, codepoint: u32) -> Option<RgbaImage> {
-    let tree =
-        usvg::Tree::from_data(data, &usvg::Options::default(), &usvg::fontdb::Database::new())
-            .ok()?;
+    let tree = usvg::Tree::from_data(data, &usvg::Options::default()).ok()?;
     let node = tree.node_by_id(&format!("glyph{codepoint}"))?;
     let size = node.abs_layer_bounding_box()?;
     let transform =
