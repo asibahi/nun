@@ -11,18 +11,18 @@ pub(crate) struct GlyphData {
 }
 
 pub trait Shaper<'f> {
-    fn load_font(font_data: &'f [u8]) -> Self;
-
     fn shape_text(&mut self, input: &str, variations: &[Variation]) -> Vec<GlyphData>;
 }
 
 pub(crate) struct HarfBuzz<'f>(harfbuzz_rs::Owned<harfbuzz_rs::Font<'f>>);
 
-impl<'f> Shaper<'f> for HarfBuzz<'f> {
-    fn load_font(font_data: &'f [u8]) -> Self {
+impl<'f> HarfBuzz<'f> {
+    pub fn new(font_data: &'f [u8]) -> Self {
         Self(harfbuzz_rs::Font::new(harfbuzz_rs::Face::from_bytes(font_data, 0)))
     }
+}
 
+impl<'f> Shaper<'f> for HarfBuzz<'f> {
     fn shape_text(&mut self, input: &str, variations: &[Variation]) -> Vec<GlyphData> {
         let buffer = harfbuzz_rs::UnicodeBuffer::new().add_str(input);
         self.0.set_variations(
@@ -39,7 +39,7 @@ impl<'f> Shaper<'f> for HarfBuzz<'f> {
 
         let output = harfbuzz_rs::shape(&self.0, buffer, &[]);
 
-        let space = self.0.get_nominal_glyph(' ').unwrap();
+        let space = self.0.get_nominal_glyph(' ').expect("Font does not hace a space character.");
         let space_width = self.0.get_glyph_h_advance(space);
         let space_width = match variations.iter().find(|v| matches!(v.kind, VariationKind::Spacing))
         {

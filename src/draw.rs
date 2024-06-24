@@ -26,7 +26,7 @@ pub fn run<const N: usize>(
     let full_text = std::fs::read_to_string(text_path.as_ref())?;
     let font_data = std::fs::read(font_path)?;
 
-    let mut shaper_font = HarfBuzz::load_font(&font_data);
+    let mut shaper = HarfBuzz::new(&font_data);
 
     let mut ab_font = ab::FontRef::try_from_slice(&font_data)?;
     let ab_scale = ab_font.pt_to_px_scale(font_size).unwrap();
@@ -36,7 +36,7 @@ pub fn run<const N: usize>(
     let ascent = ab_scaled_font.ascent();
 
     let lines = line_break(
-        &mut shaper_font,
+        &mut shaper,
         &full_text,
         ((img_width - 2 * margin) as f32 / scale_factor.horizontal) as u32,
         variations,
@@ -62,7 +62,7 @@ pub fn run<const N: usize>(
             &mut canvas,
             idx,
             &mut ab_font,
-            &mut shaper_font,
+            &mut shaper,
             line.variations,
             config,
             ScaledFontData { line_height, scale_factor, ascent, ab_scale },
@@ -115,7 +115,7 @@ fn write_in_image<'a, const N: usize>(
     canvas: &mut RgbaImage,
     line_number: usize,
     ab_font: &mut (impl ab::Font + ab::VariableFont),
-    shaper_font: &mut impl Shaper<'a>,
+    shaper: &mut impl Shaper<'a>,
     variations: [Variation; N],
     ImageConfig { margin, img_width: _, font_size: _, txt_color, bkg_color: _ }: ImageConfig,
     ScaledFontData { line_height, scale_factor, ascent, ab_scale }: ScaledFontData,
@@ -130,7 +130,7 @@ fn write_in_image<'a, const N: usize>(
             ab_font.set_variation(&tag, value);
         });
 
-    let shaped_text = shaper_font.shape_text(text_slice, &variations);
+    let shaped_text = shaper.shape_text(text_slice, &variations);
 
     let centered_line_offset = (canvas.width() - 2 * margin).saturating_sub(
         shaped_text.iter().map(|g| g.x_advance as f32 * scale_factor.horizontal).sum::<f32>()

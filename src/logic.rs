@@ -114,7 +114,7 @@ impl<const N: usize> std::fmt::Display for LineError<N> {
 }
 
 fn find_optimal_line_1_axis<'a, const N: usize>(
-    shaper_font: &mut impl Shaper<'a>,
+    shaper: &mut impl Shaper<'a>,
     text: &str,
     (start_bp, end_bp): (usize, usize),
     goal_width: u32,
@@ -134,7 +134,7 @@ fn find_optimal_line_1_axis<'a, const N: usize>(
     let mut set_slice_to_axis_value = |val: f32| {
         variations[vv_idx].change_current_val(val);
 
-        let shaped_text = shaper_font.shape_text(&text_slice, &variations);
+        let shaped_text = shaper.shape_text(&text_slice, &variations);
 
         let width = shaped_text.iter().map(|g| g.x_advance).sum::<i32>() as u32;
 
@@ -179,7 +179,7 @@ fn find_optimal_line_1_axis<'a, const N: usize>(
 }
 
 fn find_optimal_line<'a, const N: usize>(
-    shaper_font: &mut impl Shaper<'a>,
+    shaper: &mut impl Shaper<'a>,
     full_text: &str,
     (start_bp, end_bp): (usize, usize),
     goal_width: u32,
@@ -192,7 +192,7 @@ fn find_optimal_line<'a, const N: usize>(
         let mut variations = variations;
         for (idx, counter) in (0..N).rev().enumerate() {
             let attempt = find_optimal_line_1_axis(
-                shaper_font,
+                shaper,
                 full_text,
                 (start_bp, end_bp),
                 goal_width,
@@ -244,7 +244,7 @@ impl std::fmt::Display for ParagraphError {
 }
 
 pub fn line_break<'a, const N: usize>(
-    shaper_font: &mut impl Shaper<'a>,
+    shaper: &mut impl Shaper<'a>,
     text: &str,
     goal_width: u32,
     variations: [Variation; N],
@@ -253,11 +253,11 @@ pub fn line_break<'a, const N: usize>(
 
     for paragraph in text.split("\n\n") {
         let line_data = if let Ok(line_data) =
-            paragraph_line_break(shaper_font, text, paragraph, goal_width, variations, false)
+            paragraph_line_break(shaper, text, paragraph, goal_width, variations, false)
         {
             line_data
         } else {
-            paragraph_line_break(shaper_font, text, paragraph, goal_width, variations, true)?
+            paragraph_line_break(shaper, text, paragraph, goal_width, variations, true)?
         };
         paragraphs.extend(line_data)
     }
@@ -266,7 +266,7 @@ pub fn line_break<'a, const N: usize>(
 }
 
 fn paragraph_line_break<'a, const N: usize>(
-    shaper_font: &mut impl Shaper<'a>,
+    shaper: &mut impl Shaper<'a>,
     full_text: &str,
     paragraph: &str,
     goal_width: u32,
@@ -278,20 +278,16 @@ fn paragraph_line_break<'a, const N: usize>(
 
     // first see if the whole paragraph fits in one line
     // for example the Basmala
-    if let Ok(l_b) = match find_optimal_line(
-        shaper_font,
-        full_text,
-        (start_bp, end_bp),
-        goal_width,
-        variations,
-        true,
-    ) {
-        Ok(data) => Ok(data),
-        Err(LineError { kind: TooTight, .. }) => Err(ParagraphError::UnableToLayout),
-        Err(LineError { variations, kashida_count, .. }) => {
-            Ok(LineData::new(start_bp, end_bp, variations, kashida_count))
+    if let Ok(l_b) =
+        match find_optimal_line(shaper, full_text, (start_bp, end_bp), goal_width, variations, true)
+        {
+            Ok(data) => Ok(data),
+            Err(LineError { kind: TooTight, .. }) => Err(ParagraphError::UnableToLayout),
+            Err(LineError { variations, kashida_count, .. }) => {
+                Ok(LineData::new(start_bp, end_bp, variations, kashida_count))
+            }
         }
-    } {
+    {
         return Ok(vec![l_b]);
     }
 
@@ -320,7 +316,7 @@ fn paragraph_line_break<'a, const N: usize>(
             }
 
             match find_optimal_line(
-                shaper_font,
+                shaper,
                 full_text,
                 (start_bp, end_bp),
                 goal_width,
