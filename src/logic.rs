@@ -1,4 +1,4 @@
-use harfbuzz_rs as hb;
+use crate::shaper::Shaper;
 use itertools::Itertools as _;
 use std::{cmp::Ordering, ops::Not};
 
@@ -113,58 +113,8 @@ impl<const N: usize> std::fmt::Display for LineError<N> {
     }
 }
 
-#[allow(dead_code)]
-pub(crate) struct GlyphData {
-    pub codepoint: u32,
-    pub cluster: u32,
-    pub x_advance: i32,
-    pub y_advance: i32,
-    pub x_offset: i32,
-    pub y_offset: i32,
-}
-
-pub(crate) fn shape_text<const N: usize>(
-    hb_font: &mut hb::Font<'_>,
-    text_slice: &str,
-    variations: [Variation; N],
-) -> Vec<GlyphData> {
-    hb_font.set_variations(
-        &variations
-            .iter()
-            .filter_map(|v| match v.kind {
-                VariationKind::Axis(tag) => Some(hb::Variation::new(&tag, v.current_value)),
-                VariationKind::Spacing => None,
-            })
-            .collect::<Vec<_>>(),
-    );
-
-    let buffer = hb::UnicodeBuffer::new().add_str(text_slice);
-    let output = hb::shape(hb_font, buffer, &[]);
-
-    let space = hb_font.get_nominal_glyph(' ').unwrap();
-    let space_width = hb_font.get_glyph_h_advance(space);
-    let space_width = match variations.iter().find(|v| matches!(v.kind, VariationKind::Spacing)) {
-        Some(v) => (space_width as f32 * v.current_value) as i32,
-        None => space_width,
-    };
-
-    output
-        .get_glyph_infos()
-        .iter()
-        .zip(output.get_glyph_positions())
-        .map(|(i, p)| GlyphData {
-            codepoint: i.codepoint,
-            cluster: i.cluster,
-            x_advance: if i.codepoint == space { space_width } else { p.x_advance },
-            y_advance: p.y_advance,
-            x_offset: p.x_offset,
-            y_offset: p.y_offset,
-        })
-        .collect()
-}
-
-fn find_optimal_line_1_axis<const N: usize>(
-    hb_font: &mut hb::Font<'_>,
+fn find_optimal_line_1_axis<'a, const N: usize>(
+    shaper_font: &mut impl Shaper<'a>,
     text: &str,
     (start_bp, end_bp): (usize, usize),
     goal_width: u32,
@@ -184,7 +134,7 @@ fn find_optimal_line_1_axis<const N: usize>(
     let mut set_slice_to_axis_value = |val: f32| {
         variations[vv_idx].change_current_val(val);
 
-        let shaped_text = shape_text(hb_font, &text_slice, variations);
+        let shaped_text = shaper_font.shape_text(&text_slice, &variations);
 
         let width = shaped_text.iter().map(|g| g.x_advance).sum::<i32>() as u32;
 
@@ -228,8 +178,8 @@ fn find_optimal_line_1_axis<const N: usize>(
     }
 }
 
-fn find_optimal_line<const N: usize>(
-    hb_font: &mut hb::Font<'_>,
+fn find_optimal_line<'a, const N: usize>(
+    shaper_font: &mut impl Shaper<'a>,
     full_text: &str,
     (start_bp, end_bp): (usize, usize),
     goal_width: u32,
@@ -242,7 +192,7 @@ fn find_optimal_line<const N: usize>(
         let mut variations = variations;
         for (idx, counter) in (0..N).rev().enumerate() {
             let attempt = find_optimal_line_1_axis(
-                hb_font,
+                shaper_font,
                 full_text,
                 (start_bp, end_bp),
                 goal_width,
@@ -293,8 +243,8 @@ impl std::fmt::Display for ParagraphError {
     }
 }
 
-pub fn line_break<const N: usize>(
-    hb_font: &mut hb::Font<'_>,
+pub fn line_break<'a, const N: usize>(
+    shaper_font: &mut impl Shaper<'a>,
     text: &str,
     goal_width: u32,
     variations: [Variation; N],
@@ -303,11 +253,11 @@ pub fn line_break<const N: usize>(
 
     for paragraph in text.split("\n\n") {
         let line_data = if let Ok(line_data) =
-            paragraph_line_break(hb_font, text, paragraph, goal_width, variations, false)
+            paragraph_line_break(shaper_font, text, paragraph, goal_width, variations, false)
         {
             line_data
         } else {
-            paragraph_line_break(hb_font, text, paragraph, goal_width, variations, true)?
+            paragraph_line_break(shaper_font, text, paragraph, goal_width, variations, true)?
         };
         paragraphs.extend(line_data)
     }
@@ -315,8 +265,8 @@ pub fn line_break<const N: usize>(
     Ok(paragraphs)
 }
 
-fn paragraph_line_break<const N: usize>(
-    hb_font: &mut hb::Font<'_>,
+fn paragraph_line_break<'a, const N: usize>(
+    shaper_font: &mut impl Shaper<'a>,
     full_text: &str,
     paragraph: &str,
     goal_width: u32,
@@ -329,7 +279,7 @@ fn paragraph_line_break<const N: usize>(
     // first see if the whole paragraph fits in one line
     // for example the Basmala
     if let Ok(l_b) = match find_optimal_line(
-        hb_font,
+        shaper_font,
         full_text,
         (start_bp, end_bp),
         goal_width,
@@ -370,7 +320,7 @@ fn paragraph_line_break<const N: usize>(
             }
 
             match find_optimal_line(
-                hb_font,
+                shaper_font,
                 full_text,
                 (start_bp, end_bp),
                 goal_width,
