@@ -1,6 +1,6 @@
 macro_rules! my_file {
     () => {
-        "kursi"
+        "noor"
     };
 }
 
@@ -12,7 +12,7 @@ const _BLACK: [u8; 4] = [0x0A, 0x0A, 0x0A, 0xFF];
 const _OFF_WHITE: [u8; 4] = [0xFF, 0xFF, 0xF2, 0xFF];
 const _OFF_BLACK: [u8; 4] = [0x20, 0x20, 0x20, 0xFF];
 
-const _MSHQ_DEFAULT: f32 = 25.0;
+const _MSHQ_DEFAULT: f32 = 50.0;
 const _SPAC_DEFAULT: f32 = 0.0;
 
 const _RAQQ: &str = "fonts/Raqq.ttf";

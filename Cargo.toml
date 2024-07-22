@@ -4,10 +4,12 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-ab_glyph = " 0.2.26"
+ab_glyph = " 0.2.27"
 harfbuzz_rs = { git = "https://github.com/asibahi/harfbuzz_rs.git" }
-hashbrown = "0.14.5"
 # harfbuzz_rs = "2.0.1" # crates.io version
+hashbrown = "0.14.5"
+# rustybuzz = "0.14"
+rustybuzz = { git = "https://github.com/RazrFalcon/rustybuzz.git" }
 icu_segmenter = "1.5"
 image = { version = "0.25", default-features = false, features = [
     "png",
@@ -17,8 +19,8 @@ image = { version = "0.25", default-features = false, features = [
 imageproc = "0.25"
 itertools = "0.13"
 pathfinding = "4.10"
-resvg = "0.42"
-kashida = { path = "../kashida/" } # local repo to allow for iteration
+resvg = { version = "0.42", default-features = false }
+kashida = "0.0.7"
 
 [lints.clippy]
 filter_map_bool_then = "allow"

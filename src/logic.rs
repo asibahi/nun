@@ -259,7 +259,7 @@ pub fn line_break<'a, const N: usize>(
         } else {
             paragraph_line_break(shaper, text, paragraph, goal_width, variations, true)?
         };
-        paragraphs.extend(line_data)
+        paragraphs.extend(line_data);
     }
 
     Ok(paragraphs)

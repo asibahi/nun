@@ -1,6 +1,6 @@
 use crate::{
     logic::{line_break, Variation, VariationKind},
-    shaper::{HarfBuzz, Shaper},
+    shaper::Shaper,
 };
 use ab_glyph::{self as ab, Font as _, ScaleFont as _};
 use image::{GenericImageView as _, Rgba, RgbaImage};
@@ -26,7 +26,8 @@ pub fn run<const N: usize>(
     let full_text = std::fs::read_to_string(text_path.as_ref())?;
     let font_data = std::fs::read(font_path)?;
 
-    let mut shaper = HarfBuzz::new(&font_data);
+    // let mut shaper = HarfBuzz::new(&font_data);
+    let mut shaper = crate::shaper::RustBuzz::new(&font_data);
 
     let mut ab_font = ab::FontRef::try_from_slice(&font_data)?;
     let ab_scale = ab_font.pt_to_px_scale(font_size).unwrap();
