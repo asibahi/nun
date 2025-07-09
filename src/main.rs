@@ -19,6 +19,10 @@ const _RAQQ: &str = "fonts/Raqq.ttf";
 const _NOTO: &str = "fonts/NotoArabic.ttf";
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let mut args = pico_args::Arguments::from_env();
+    let file_name =
+        args.free_from_str().unwrap_or(concat!("texts/", my_file!(), ".txt").to_owned());
+
     let config = nun::ImageConfig {
         margin: FACTOR * 100,
         img_width: FACTOR * 2000,
@@ -33,5 +37,5 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         nun::Variation::new_axis(*b"SPAC", -80.0, 125.0, _SPAC_DEFAULT),
     ];
 
-    nun::run(concat!("texts/", my_file!(), ".txt"), _RAQQ, variations, config)
+    nun::run(&file_name, _RAQQ, variations, config)
 }

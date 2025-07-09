@@ -982,6 +982,7 @@ dependencies = [
  "itertools 0.13.0",
  "kashida",
  "pathfinding",
+ "pico-args",
  "resvg",
  "rustybuzz",
 ]

@@ -274,7 +274,7 @@ fn paragraph_line_break<'a, const N: usize>(
     kashida: bool,
 ) -> Result<Vec<LineData<N>>, ParagraphError> {
     let start_bp = paragraph.as_ptr() as usize - full_text.as_ptr() as usize;
-    let end_bp = start_bp + paragraph.as_bytes().len();
+    let end_bp = start_bp + paragraph.len();
 
     // first see if the whole paragraph fits in one line
     // for example the Basmala
