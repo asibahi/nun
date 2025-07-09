@@ -1,41 +1,34 @@
-macro_rules! my_file {
-    () => {
-        "noor"
-    };
-}
+mod config;
 
 const FACTOR: u32 = 4;
 
-const _WHITE: [u8; 4] = [0xFF; 4];
-const _BLACK: [u8; 4] = [0x0A, 0x0A, 0x0A, 0xFF];
-
-const _OFF_WHITE: [u8; 4] = [0xFF, 0xFF, 0xF2, 0xFF];
-const _OFF_BLACK: [u8; 4] = [0x20, 0x20, 0x20, 0xFF];
-
-const _MSHQ_DEFAULT: f32 = 50.0;
-const _SPAC_DEFAULT: f32 = 0.0;
-
-const _RAQQ: &str = "fonts/Raqq.ttf";
-const _NOTO: &str = "fonts/NotoArabic.ttf";
-
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut args = pico_args::Arguments::from_env();
-    let file_name =
-        args.free_from_str().unwrap_or(concat!("texts/", my_file!(), ".txt").to_owned());
 
-    let config = nun::ImageConfig {
-        margin: FACTOR * 100,
-        img_width: FACTOR * 2000,
-        font_size: FACTOR as f32 * 80.0,
-        txt_color: _BLACK,
-        bkg_color: _OFF_WHITE,
+    let config = config::read_config(&mut args)?;
+
+    let img_config = nun::ImageConfig {
+        margin: FACTOR * config.margin,
+        img_width: FACTOR * config.width,
+        font_size: FACTOR as f32 * config.font.size,
+        txt_color: config.text_color.to_be_bytes(),
+        bkg_color: config.bg_color.to_be_bytes(),
     };
 
-    let variations = [
-        // nun::Variation::new_spacing(),
-        nun::Variation::new_axis(*b"MSHQ", 0.0, 100.0, _MSHQ_DEFAULT),
-        nun::Variation::new_axis(*b"SPAC", -80.0, 125.0, _SPAC_DEFAULT),
-    ];
+    let variations = if config.font.variations.is_empty() {
+        vec![nun::Variation::new_spacing()]
+    } else {
+        config
+            .font
+            .variations
+            .into_iter()
+            .map(|v| {
+                assert!(v.name.len() == 4);
+                let axis: [u8; 4] = v.name.as_bytes().try_into().unwrap();
+                nun::Variation::new_axis(axis, v.min, v.max, v.rest)
+            })
+            .collect()
+    };
 
-    nun::run(&file_name, _RAQQ, variations, config)
+    nun::run(config.text, config.font.path, variations, img_config)
 }

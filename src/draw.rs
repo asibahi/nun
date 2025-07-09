@@ -17,10 +17,10 @@ pub struct ImageConfig {
     pub bkg_color: [u8; 4],
 }
 
-pub fn run<const N: usize>(
+pub fn run(
     text_path: impl AsRef<Path>,
     font_path: impl AsRef<Path>,
-    variations: [Variation; N],
+    variations: Vec<Variation>,
     config @ ImageConfig { margin, img_width, font_size, txt_color: _, bkg_color }: ImageConfig,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let full_text = std::fs::read_to_string(text_path.as_ref())?;
@@ -111,13 +111,13 @@ struct ScaledFontData {
 }
 
 #[allow(clippy::too_many_arguments)]
-fn write_in_image<'a, const N: usize>(
+fn write_in_image<'a>(
     text_slice: &str,
     canvas: &mut RgbaImage,
     line_number: usize,
     ab_font: &mut (impl ab::Font + ab::VariableFont),
     shaper: &mut impl Shaper<'a>,
-    variations: [Variation; N],
+    variations: Vec<Variation>,
     ImageConfig { margin, img_width: _, font_size: _, txt_color, bkg_color: _ }: ImageConfig,
     ScaledFontData { line_height, scale_factor, ascent, ab_scale }: ScaledFontData,
 ) {

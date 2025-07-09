@@ -49,21 +49,21 @@ impl Variation {
 }
 
 #[derive(Clone, Debug)]
-pub struct LineData<const N: usize> {
+pub struct LineData {
     pub start_bp: usize,
     pub end_bp: usize,
-    pub variations: [Variation; N],
+    pub variations: Vec<Variation>,
     pub kashida_count: usize,
 }
 
-impl<const N: usize> LineData<N> {
+impl LineData {
     pub fn new(
         start_bp: usize,
         end_bp: usize,
-        variations: [Variation; N],
+        variations: &Vec<Variation>,
         kashida_count: usize,
     ) -> Self {
-        Self { start_bp, end_bp, variations, kashida_count }
+        Self { start_bp, end_bp, variations: variations.clone(), kashida_count }
     }
 
     pub(crate) fn cost(&self) -> usize {
@@ -74,7 +74,7 @@ impl<const N: usize> LineData<N> {
             max: 100.0,
             best: 0.0,
         }
-        .cost(N);
+        .cost(self.variations.len());
 
         self.variations.iter().enumerate().fold(k_v, |acc, (i, v)| acc + v.cost(i))
     }
@@ -90,19 +90,19 @@ enum LineErrorKind {
 use LineErrorKind::{TooLoose, TooTight};
 
 #[derive(Debug)]
-struct LineError<const N: usize> {
+struct LineError {
     kind: LineErrorKind,
-    variations: [Variation; N],
+    variations: Vec<Variation>,
     kashida_count: usize,
 }
 
-impl<const N: usize> LineError<N> {
-    fn new(kind: LineErrorKind, variations: [Variation; N], kashida_count: usize) -> Self {
+impl LineError {
+    fn new(kind: LineErrorKind, variations: Vec<Variation>, kashida_count: usize) -> Self {
         Self { kind, variations, kashida_count }
     }
 }
-impl<const N: usize> std::error::Error for LineError<N> {}
-impl<const N: usize> std::fmt::Display for LineError<N> {
+impl std::error::Error for LineError {}
+impl std::fmt::Display for LineError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self.kind {
             TooLoose => write!(f, "Line is too loose."),
@@ -113,18 +113,18 @@ impl<const N: usize> std::fmt::Display for LineError<N> {
     }
 }
 
-fn find_optimal_line_1_axis<'a, const N: usize>(
+fn find_optimal_line_1_axis<'a>(
     shaper: &mut impl Shaper<'a>,
     text: &str,
     (start_bp, end_bp): (usize, usize),
     goal_width: u32,
     vv_idx: usize,
-    mut variations: [Variation; N],
+    mut variations: Vec<Variation>,
     (kashida_locs, kashida_count): (&[usize], usize),
-) -> Result<LineData<N>, LineError<N>> {
-    assert!(vv_idx < N, "Index should be within the variations array");
+) -> Result<LineData, LineError> {
+    assert!(vv_idx < variations.len(), "Index should be within the variations array");
 
-    let ret = LineData::new(start_bp, end_bp, variations, kashida_count);
+    let ret = LineData::new(start_bp, end_bp, &variations, kashida_count);
 
     let mut search_range = variations[vv_idx].min..variations[vv_idx].max;
 
@@ -178,19 +178,19 @@ fn find_optimal_line_1_axis<'a, const N: usize>(
     }
 }
 
-fn find_optimal_line<'a, const N: usize>(
+fn find_optimal_line<'a>(
     shaper: &mut impl Shaper<'a>,
     full_text: &str,
     (start_bp, end_bp): (usize, usize),
     goal_width: u32,
-    variations: [Variation; N],
+    variations: Vec<Variation>,
     kashida: bool,
-) -> Result<LineData<N>, LineError<N>> {
-    const { assert!(N > 0) }
+) -> Result<LineData, LineError> {
+    assert!(variations.len() > 0);
 
     let mut inner = |k| {
-        let mut variations = variations;
-        for (idx, counter) in (0..N).rev().enumerate() {
+        let mut variations = variations.clone();
+        for (idx, counter) in (0..variations.len()).rev().enumerate() {
             let attempt = find_optimal_line_1_axis(
                 shaper,
                 full_text,
@@ -243,21 +243,21 @@ impl std::fmt::Display for ParagraphError {
     }
 }
 
-pub fn line_break<'a, const N: usize>(
+pub fn line_break<'a>(
     shaper: &mut impl Shaper<'a>,
     text: &str,
     goal_width: u32,
-    variations: [Variation; N],
-) -> Result<Vec<LineData<N>>, ParagraphError> {
+    variations: Vec<Variation>,
+) -> Result<Vec<LineData>, ParagraphError> {
     let mut paragraphs = vec![];
 
     for paragraph in text.split("\n\n") {
         let line_data = if let Ok(line_data) =
-            paragraph_line_break(shaper, text, paragraph, goal_width, variations, false)
+            paragraph_line_break(shaper, text, paragraph, goal_width, &variations, false)
         {
             line_data
         } else {
-            paragraph_line_break(shaper, text, paragraph, goal_width, variations, true)?
+            paragraph_line_break(shaper, text, paragraph, goal_width, &variations, true)?
         };
         paragraphs.extend(line_data);
     }
@@ -265,26 +265,26 @@ pub fn line_break<'a, const N: usize>(
     Ok(paragraphs)
 }
 
-fn paragraph_line_break<'a, const N: usize>(
+fn paragraph_line_break<'a>(
     shaper: &mut impl Shaper<'a>,
     full_text: &str,
     paragraph: &str,
     goal_width: u32,
-    variations: [Variation; N],
+    variations: &Vec<Variation>,
     kashida: bool,
-) -> Result<Vec<LineData<N>>, ParagraphError> {
+) -> Result<Vec<LineData>, ParagraphError> {
     let start_bp = paragraph.as_ptr() as usize - full_text.as_ptr() as usize;
     let end_bp = start_bp + paragraph.len();
 
     // first see if the whole paragraph fits in one line
     // for example the Basmala
     if let Ok(l_b) =
-        match find_optimal_line(shaper, full_text, (start_bp, end_bp), goal_width, variations, true)
+        match find_optimal_line(shaper, full_text, (start_bp, end_bp), goal_width, variations.clone(), true)
         {
             Ok(data) => Ok(data),
             Err(LineError { kind: TooTight, .. }) => Err(ParagraphError::UnableToLayout),
             Err(LineError { variations, kashida_count, .. }) => {
-                Ok(LineData::new(start_bp, end_bp, variations, kashida_count))
+                Ok(LineData::new(start_bp, end_bp, &variations, kashida_count))
             }
         }
     {
@@ -320,7 +320,7 @@ fn paragraph_line_break<'a, const N: usize>(
                 full_text,
                 (start_bp, end_bp),
                 goal_width,
-                variations,
+                variations.clone(),
                 kashida,
             ) {
                 Ok(data) => {

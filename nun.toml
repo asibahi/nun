@@ -1,0 +1,29 @@
+text = "texts/kursi.txt"
+margin = 100
+width = 2000
+
+text_color = 0x0A0A0AFF # BLACK
+bg_color = 0xFFFFF2FF   # OFF WHITE
+# text_color = 0xFFFFFFFF # WHITE
+# bg_color = 0x202020FF # OFF BLACK
+
+[font]
+path = "fonts/Raqq.ttf"
+size = 80.0
+
+# if there are no variations uncomment the following line
+# variations = []
+
+# variations specific to Raqq.ttf
+# replace with the axis in your font
+[[font.variations]]
+name = "MSHQ"
+min = 0.0
+max = 100.0
+rest = 50.0
+
+[[font.variations]]
+name = "SPAC"
+min = -80.0
+max = 125.0
+rest = 0.0
