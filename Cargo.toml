@@ -5,10 +5,9 @@ edition = "2021"
 
 [dependencies]
 ab_glyph = "0.2"
-harfbuzz_rs = "2.0.1" # crates.io version
+# harfbuzz_rs = "2.0.1" # crates.io version
 hashbrown = "0.14.5"
 rustybuzz = "0.14"
-# rustybuzz = { git = "https://github.com/RazrFalcon/rustybuzz.git" }
 icu_segmenter = "1.5"
 image = { version = "0.25", default-features = false, features = [
 	"png",
