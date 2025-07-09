@@ -85,7 +85,7 @@ fn draw_signature(canvas: &mut RgbaImage, margin: u32) -> Result<(), Box<dyn std
 
     let (_, height) = canvas.dimensions();
 
-    let stamp_svg = std::fs::read_to_string("personal_stamp.svg")?;
+    let Ok(stamp_svg) = std::fs::read_to_string("personal_stamp.svg") else { return Ok(()) };
     let tree = usvg::Tree::from_str(&stamp_svg, &usvg::Options::default())?;
 
     let size = tree.size().to_int_size();
