@@ -10,9 +10,7 @@ bg_color = 0xFFFFF2FF   # OFF WHITE
 [font]
 path = "fonts/Raqq.ttf"
 size = 80.0
-
-# if there are no variations uncomment the following line
-# variations = []
+line_height = 1.25
 
 # variations specific to Raqq.ttf
 # replace with the axis in your font

@@ -1,4 +1,4 @@
-// #![allow(dead_code)]
+#![allow(dead_code)]
 #![allow(unused)]
 
 use crate::{logic::VariationKind, Variation};
@@ -90,9 +90,9 @@ impl<'f> Shaper<'f> for RustBuzz<'f> {
         let output = rustybuzz::shape(&self.0, &[], buffer);
 
         let space = self.0.glyph_index(' ').expect("Font does not hace a space character.");
-        let space_width = self.0.glyph_hor_advance(space).unwrap() as i32;
-
-        let space_width = match variations.iter().find(|v| matches!(v.kind, VariationKind::Spacing))
+        let adjust_space = |space_width| match variations
+            .iter()
+            .find(|v| matches!(v.kind, VariationKind::Spacing))
         {
             Some(v) => (space_width as f32 * v.current_value) as i32,
             None => space_width,
@@ -105,7 +105,11 @@ impl<'f> Shaper<'f> for RustBuzz<'f> {
             .map(|(i, p)| GlyphData {
                 codepoint: i.glyph_id,
                 cluster: i.cluster,
-                x_advance: if i.glyph_id == space.0 as u32 { space_width } else { p.x_advance },
+                x_advance: if i.glyph_id == space.0 as u32 {
+                    adjust_space(p.x_advance)
+                } else {
+                    p.x_advance
+                },
                 y_advance: p.y_advance,
                 x_offset: p.x_offset,
                 y_offset: p.y_offset,

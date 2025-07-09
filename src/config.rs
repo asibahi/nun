@@ -14,7 +14,9 @@ pub struct Config {
 pub struct FontConfig {
     pub path: String,
     pub size: f32,
-    pub variations: Vec<VariationConfig>,
+    pub line_height: f32,
+
+    pub variations: Option<Vec<VariationConfig>>,
 }
 
 #[derive(facet::Facet)]
@@ -30,7 +32,6 @@ pub fn read_config(args: &mut pico_args::Arguments) -> Result<Config, Box<dyn st
     let config_file = std::fs::read_to_string(&config_path)?;
 
     let config: Config = facet_toml::from_str(&config_file).map_err(|e| {
-        //
         e.to_string()
     })?;
 

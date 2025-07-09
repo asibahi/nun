@@ -13,6 +13,7 @@ pub struct ImageConfig {
     pub margin: u32,
     pub img_width: u32,
     pub font_size: f32,
+    pub line_height: f32,
     pub txt_color: [u8; 4],
     pub bkg_color: [u8; 4],
 }
@@ -21,12 +22,12 @@ pub fn run(
     text_path: impl AsRef<Path>,
     font_path: impl AsRef<Path>,
     variations: Vec<Variation>,
-    config @ ImageConfig { margin, img_width, font_size, txt_color: _, bkg_color }: ImageConfig,
+    config @ ImageConfig { margin, img_width, font_size, line_height, bkg_color, .. }: ImageConfig,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let full_text = std::fs::read_to_string(text_path.as_ref())?;
     let font_data = std::fs::read(font_path)?;
 
-    // let mut shaper = HarfBuzz::new(&font_data);
+    // let mut shaper = crate::shaper::HarfBuzz::new(&font_data);
     let mut shaper = crate::shaper::RustBuzz::new(&font_data);
 
     let mut ab_font = ab::FontRef::try_from_slice(&font_data)?;
@@ -43,7 +44,7 @@ pub fn run(
         variations,
     )?;
 
-    let line_height = (ab_scaled_font.height() * 1.25) as u32;
+    let line_height = (ab_scaled_font.height() * line_height) as u32;
 
     let mut canvas = RgbaImage::from_pixel(
         img_width,
@@ -118,7 +119,7 @@ fn write_in_image<'a>(
     ab_font: &mut (impl ab::Font + ab::VariableFont),
     shaper: &mut impl Shaper<'a>,
     variations: Vec<Variation>,
-    ImageConfig { margin, img_width: _, font_size: _, txt_color, bkg_color: _ }: ImageConfig,
+    ImageConfig { margin, txt_color, .. }: ImageConfig,
     ScaledFontData { line_height, scale_factor, ascent, ab_scale }: ScaledFontData,
 ) {
     variations

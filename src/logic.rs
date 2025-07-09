@@ -278,16 +278,20 @@ fn paragraph_line_break<'a>(
 
     // first see if the whole paragraph fits in one line
     // for example the Basmala
-    if let Ok(l_b) =
-        match find_optimal_line(shaper, full_text, (start_bp, end_bp), goal_width, variations.clone(), true)
-        {
-            Ok(data) => Ok(data),
-            Err(LineError { kind: TooTight, .. }) => Err(ParagraphError::UnableToLayout),
-            Err(LineError { variations, kashida_count, .. }) => {
-                Ok(LineData::new(start_bp, end_bp, &variations, kashida_count))
-            }
+    if let Ok(l_b) = match find_optimal_line(
+        shaper,
+        full_text,
+        (start_bp, end_bp),
+        goal_width,
+        variations.clone(),
+        true,
+    ) {
+        Ok(data) => Ok(data),
+        Err(LineError { kind: TooTight, .. }) => Err(ParagraphError::UnableToLayout),
+        Err(LineError { variations, kashida_count, .. }) => {
+            Ok(LineData::new(start_bp, end_bp, &variations, kashida_count))
         }
-    {
+    } {
         return Ok(vec![l_b]);
     }
 
