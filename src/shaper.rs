@@ -15,18 +15,32 @@ pub(crate) struct GlyphData {
 }
 
 pub trait Shaper<'f> {
-    fn shape_text(&mut self, input: &str, variations: &[Variation]) -> Vec<GlyphData>;
+    fn shape_text(
+        &mut self,
+        input: &str,
+        variations: &[Variation],
+    ) -> Vec<GlyphData>;
 }
 
 pub(crate) struct RustBuzz<'f>(rustybuzz::Face<'f>, Vec<Feature>);
 impl<'f> RustBuzz<'f> {
-    pub fn new(font_data: &'f [u8], features: &[[u8; 4]]) -> Self {
-        let features = features.iter().map(|f| Feature::new(Tag::from_bytes(f), 0, ..)).collect();
+    pub fn new(
+        font_data: &'f [u8],
+        features: &[[u8; 4]],
+    ) -> Self {
+        let features = features
+            .iter()
+            .map(|f| Feature::new(Tag::from_bytes(f), 0, ..))
+            .collect();
         Self(rustybuzz::Face::from_slice(font_data, 0).unwrap(), features)
     }
 }
 impl<'f> Shaper<'f> for RustBuzz<'f> {
-    fn shape_text(&mut self, input: &str, variations: &[Variation]) -> Vec<GlyphData> {
+    fn shape_text(
+        &mut self,
+        input: &str,
+        variations: &[Variation],
+    ) -> Vec<GlyphData> {
         let mut buffer = rustybuzz::UnicodeBuffer::new();
         buffer.push_str(input);
 
@@ -45,7 +59,10 @@ impl<'f> Shaper<'f> for RustBuzz<'f> {
 
         let output = rustybuzz::shape(&self.0, &self.1, buffer);
 
-        let space = self.0.glyph_index(' ').expect("Font does not hace a space character.");
+        let space = self
+            .0
+            .glyph_index(' ')
+            .expect("Font does not hace a space character.");
         let adjust_space = |space_width| match variations
             .iter()
             .find(|v| matches!(v.kind, VariationKind::Spacing))

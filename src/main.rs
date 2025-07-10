@@ -28,9 +28,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         variations.push(nun::Variation::new_spacing());
     }
 
-    let features = config.font.features.into_iter().flatten().map(tag).collect::<Vec<_>>();
+    let features = config
+        .font
+        .features
+        .into_iter()
+        .flatten()
+        .map(tag)
+        .collect::<Vec<_>>();
 
-    nun::run(config.text, config.font.path, &features, variations, img_config)
+    nun::run(
+        config.text,
+        config.font.path,
+        &features,
+        variations,
+        img_config,
+    )
 }
 
 fn tag(tag: String) -> [u8; 4] {

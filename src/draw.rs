@@ -23,7 +23,14 @@ pub fn run(
     font_path: impl AsRef<Path>,
     features: &[[u8; 4]],
     variations: Vec<Variation>,
-    config @ ImageConfig { margin, img_width, font_size, line_height, bkg_color, .. }: ImageConfig,
+    config @ ImageConfig {
+        margin,
+        img_width,
+        font_size,
+        line_height,
+        bkg_color,
+        ..
+    }: ImageConfig,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let full_text = std::fs::read_to_string(text_path.as_ref())?;
     let font_data = std::fs::read(font_path)?;
@@ -68,7 +75,12 @@ pub fn run(
             &mut shaper,
             line.variations,
             config,
-            ScaledFontData { line_height, scale_factor, ascent, ab_scale },
+            ScaledFontData {
+                line_height,
+                scale_factor,
+                ascent,
+                ab_scale,
+            },
         );
     }
 
@@ -79,7 +91,10 @@ pub fn run(
     Ok(())
 }
 
-fn draw_signature(canvas: &mut RgbaImage, margin: u32) -> Result<(), Box<dyn std::error::Error>> {
+fn draw_signature(
+    canvas: &mut RgbaImage,
+    margin: u32,
+) -> Result<(), Box<dyn std::error::Error>> {
     // hacky function because I don't understand SVGs.  buggy af.
 
     // No idea how to position things correctly so I just have to remember changing this when I change it in `main.rs`
@@ -87,7 +102,9 @@ fn draw_signature(canvas: &mut RgbaImage, margin: u32) -> Result<(), Box<dyn std
 
     let (_, height) = canvas.dimensions();
 
-    let Ok(stamp_svg) = std::fs::read_to_string("personal_stamp.svg") else { return Ok(()) };
+    let Ok(stamp_svg) = std::fs::read_to_string("personal_stamp.svg") else {
+        return Ok(());
+    };
     let tree = usvg::Tree::from_str(&stamp_svg, &usvg::Options::default())?;
 
     let size = tree.size().to_int_size();
@@ -120,8 +137,15 @@ fn write_in_image<'a>(
     ab_font: &mut (impl ab::Font + ab::VariableFont),
     shaper: &mut impl Shaper<'a>,
     variations: Vec<Variation>,
-    ImageConfig { margin, txt_color, .. }: ImageConfig,
-    ScaledFontData { line_height, scale_factor, ascent, ab_scale }: ScaledFontData,
+    ImageConfig {
+        margin, txt_color, ..
+    }: ImageConfig,
+    ScaledFontData {
+        line_height,
+        scale_factor,
+        ascent,
+        ab_scale,
+    }: ScaledFontData,
 ) {
     variations
         .iter()
@@ -136,8 +160,10 @@ fn write_in_image<'a>(
     let shaped_text = shaper.shape_text(text_slice, &variations);
 
     let centered_line_offset = (canvas.width() - 2 * margin).saturating_sub(
-        shaped_text.iter().map(|g| g.x_advance as f32 * scale_factor.horizontal).sum::<f32>()
-            as u32,
+        shaped_text
+            .iter()
+            .map(|g| g.x_advance as f32 * scale_factor.horizontal)
+            .sum::<f32>() as u32,
     ) / 2;
 
     let mut caret = 0;
@@ -188,7 +214,11 @@ fn write_in_image<'a>(
     }
 }
 
-fn svg_data_to_glyph(data: &[u8], bb: ab::Rect, codepoint: u32) -> Option<RgbaImage> {
+fn svg_data_to_glyph(
+    data: &[u8],
+    bb: ab::Rect,
+    codepoint: u32,
+) -> Option<RgbaImage> {
     let tree = usvg::Tree::from_data(data, &usvg::Options::default()).ok()?;
     let node = tree.node_by_id(&format!("glyph{codepoint}"))?;
     let size = node.abs_layer_bounding_box()?;

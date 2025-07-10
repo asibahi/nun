@@ -32,18 +32,35 @@ impl Variation {
     }
 
     #[must_use]
-    pub fn new_axis(tag: [u8; 4], min: f32, max: f32, best: f32) -> Self {
-        Self { kind: VariationKind::Axis(tag), min, max, best, current_value: best }
+    pub fn new_axis(
+        tag: [u8; 4],
+        min: f32,
+        max: f32,
+        best: f32,
+    ) -> Self {
+        Self {
+            kind: VariationKind::Axis(tag),
+            min,
+            max,
+            best,
+            current_value: best,
+        }
     }
 
     // lower priority is lower cost (i.e. better)
-    fn cost(&self, priority: usize) -> usize {
+    fn cost(
+        &self,
+        priority: usize,
+    ) -> usize {
         // normalizes difference between current_value and best
         let dif = (self.current_value - self.best) * 100.0 / (self.max - self.min);
         dif.abs().powi(priority as i32 + 2) as usize
     }
 
-    fn change_current_val(&mut self, new_val: f32) {
+    fn change_current_val(
+        &mut self,
+        new_val: f32,
+    ) {
         self.current_value = new_val;
     }
 }
@@ -63,7 +80,12 @@ impl LineData {
         variations: &Vec<Variation>,
         kashida_count: usize,
     ) -> Self {
-        Self { start_bp, end_bp, variations: variations.clone(), kashida_count }
+        Self {
+            start_bp,
+            end_bp,
+            variations: variations.clone(),
+            kashida_count,
+        }
     }
 
     pub(crate) fn cost(&self) -> usize {
@@ -76,7 +98,10 @@ impl LineData {
         }
         .cost(self.variations.len());
 
-        self.variations.iter().enumerate().fold(k_v, |acc, (i, v)| acc + v.cost(i))
+        self.variations
+            .iter()
+            .enumerate()
+            .fold(k_v, |acc, (i, v)| acc + v.cost(i))
     }
 }
 
@@ -97,13 +122,24 @@ struct LineError {
 }
 
 impl LineError {
-    fn new(kind: LineErrorKind, variations: Vec<Variation>, kashida_count: usize) -> Self {
-        Self { kind, variations, kashida_count }
+    fn new(
+        kind: LineErrorKind,
+        variations: Vec<Variation>,
+        kashida_count: usize,
+    ) -> Self {
+        Self {
+            kind,
+            variations,
+            kashida_count,
+        }
     }
 }
 impl std::error::Error for LineError {}
 impl std::fmt::Display for LineError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(
+        &self,
+        f: &mut std::fmt::Formatter<'_>,
+    ) -> std::fmt::Result {
         match self.kind {
             TooLoose => write!(f, "Line is too loose."),
             TooTight => write!(f, "Line is too tight."),
@@ -122,7 +158,10 @@ fn find_optimal_line_1_axis<'a>(
     mut variations: Vec<Variation>,
     (kashida_locs, kashida_count): (&[usize], usize),
 ) -> Result<LineData, LineError> {
-    assert!(vv_idx < variations.len(), "Index should be within the variations array");
+    assert!(
+        vv_idx < variations.len(),
+        "Index should be within the variations array"
+    );
 
     let ret = LineData::new(start_bp, end_bp, &variations, kashida_count);
 
@@ -236,7 +275,10 @@ pub enum ParagraphError {
 }
 impl std::error::Error for ParagraphError {}
 impl std::fmt::Display for ParagraphError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(
+        &self,
+        f: &mut std::fmt::Formatter<'_>,
+    ) -> std::fmt::Result {
         match self {
             ParagraphError::UnableToLayout => write!(f, "Unable to layout paragraph."),
         }
@@ -288,9 +330,11 @@ fn paragraph_line_break<'a>(
     ) {
         Ok(data) => Ok(data),
         Err(LineError { kind: TooTight, .. }) => Err(ParagraphError::UnableToLayout),
-        Err(LineError { variations, kashida_count, .. }) => {
-            Ok(LineData::new(start_bp, end_bp, &variations, kashida_count))
-        }
+        Err(LineError {
+            variations,
+            kashida_count,
+            ..
+        }) => Ok(LineData::new(start_bp, end_bp, &variations, kashida_count)),
     } {
         return Ok(vec![l_b]);
     }
@@ -339,7 +383,11 @@ fn paragraph_line_break<'a>(
 
     pathfinding::prelude::dijkstra(
         &start_bp,
-        |&p| edges.iter().filter_map(move |(&(s, e), ld)| s.eq(&p).then(|| (e, ld.cost()))),
+        |&p| {
+            edges
+                .iter()
+                .filter_map(move |(&(s, e), ld)| s.eq(&p).then(|| (e, ld.cost())))
+        },
         |&p| p == end_bp,
     )
     .and_then(|(path, _)| {
