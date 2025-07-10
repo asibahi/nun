@@ -21,6 +21,7 @@ pub struct ImageConfig {
 pub fn run(
     text_path: impl AsRef<Path>,
     font_path: impl AsRef<Path>,
+    features: &[[u8; 4]],
     variations: Vec<Variation>,
     config @ ImageConfig { margin, img_width, font_size, line_height, bkg_color, .. }: ImageConfig,
 ) -> Result<(), Box<dyn std::error::Error>> {
@@ -28,7 +29,7 @@ pub fn run(
     let font_data = std::fs::read(font_path)?;
 
     // let mut shaper = crate::shaper::HarfBuzz::new(&font_data);
-    let mut shaper = crate::shaper::RustBuzz::new(&font_data);
+    let mut shaper = crate::shaper::RustBuzz::new(&font_data, features);
 
     let mut ab_font = ab::FontRef::try_from_slice(&font_data)?;
     let ab_scale = ab_font.pt_to_px_scale(font_size).unwrap();

@@ -12,6 +12,10 @@ path = "fonts/Raqq.ttf"
 size = 80.0
 line_height = 1.25
 
+# untested
+# add whatever OT features. they're passed as-is to shaper
+# features = ["kern"]
+
 # variations specific to Raqq.ttf
 # replace with the axis in your font
 [[font.variations]]

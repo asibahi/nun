@@ -21,16 +21,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .variations
         .into_iter()
         .flatten()
-        .map(|v| {
-            assert!(v.name.len() == 4);
-            let axis: [u8; 4] = v.name.as_bytes().try_into().unwrap();
-            nun::Variation::new_axis(axis, v.min, v.max, v.rest)
-        })
+        .map(|v| nun::Variation::new_axis(tag(v.name), v.min, v.max, v.rest))
         .collect::<Vec<_>>();
 
     if variations.is_empty() {
         variations.push(nun::Variation::new_spacing());
     }
 
-    nun::run(config.text, config.font.path, variations, img_config)
+    let features = config.font.features.into_iter().flatten().map(tag).collect::<Vec<_>>();
+
+    nun::run(config.text, config.font.path, &features, variations, img_config)
+}
+
+fn tag(tag: String) -> [u8; 4] {
+    assert!(tag.len() == 4, "Tag length must be 4 bytes");
+    tag.as_bytes().try_into().unwrap()
 }
