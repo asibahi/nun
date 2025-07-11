@@ -7,6 +7,14 @@ You can find the ideas discussed in https://asibahi.github.io/thoughts/practical
 
 Example outputs of this program can be found in the `/images` directory. This is one
 
-Font used is [Raqq by Khaled Hosny](https://aliftype.com/raqq/english)
+---
+
+This is [Raqq](https://aliftype.com/raqq/english) by @khaledhosny
 
 ![الله نور السماوات والأرض](images/noor_50.png)
+
+---
+
+This is [Estedad](https://github.com/aminabedi68/Estedad) by @aminabedi68
+
+![آية الكرسي](images/kursi-estedad.png)

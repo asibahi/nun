@@ -1,0 +1,31 @@
+text = "texts/kursi.txt"
+margin = 100
+width = 2000
+
+text_color = 0x0A0A0AFF # BLACK
+bg_color = 0xFFFFF2FF   # OFF WHITE
+# text_color = 0xFFFFFFFF # WHITE
+# bg_color = 0x202020FF # OFF BLACK
+
+[font]
+path = "fonts/Estedad-FD[KSHD,wght].ttf"
+size = 80.0
+line_height = 0.9
+
+# untested
+# add whatever OT features. they're passed as-is to shaper
+# features = ["kern"]
+
+# variations specific to Raqq.ttf
+# replace with the axis in your font
+[[font.variations]]
+name = "KSHD"
+min = 100
+max = 200
+rest = 100
+
+[[font.variations]]
+name = "wght"
+min = 300
+max = 300
+rest = 300
