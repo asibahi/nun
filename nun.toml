@@ -1,4 +1,4 @@
-text = "texts/kursi.txt"
+text = "texts/roboto_readme.txt"
 margin = 100
 width = 2000
 
@@ -8,24 +8,18 @@ bg_color = 0xFFFFF2FF   # OFF WHITE
 # bg_color = 0x202020FF # OFF BLACK
 
 [font]
-path = "fonts/Raqq.ttf"
+path = "fonts/RobotoSerif[grad,opsz,wdth,wgth].ttf"
 size = 80.0
 line_height = 1.25
 
 # untested
 # add whatever OT features. they're passed as-is to shaper
-# features = ["kern"]
+# features = ["ss02"]
 
 # variations specific to Raqq.ttf
 # replace with the axis in your font
 [[font.variations]]
-name = "MSHQ"
-min = 0.0
-max = 100.0
-rest = 50.0
-
-[[font.variations]]
-name = "SPAC"
-min = -80.0
-max = 125.0
-rest = 0.0
+name = "wdth"
+min = 50
+max = 150
+rest = 100

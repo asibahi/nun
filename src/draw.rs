@@ -2,7 +2,7 @@ use crate::{
     logic::{line_break, Variation, VariationKind},
     shaper::Shaper,
 };
-use ab_glyph::{self as ab, Font as _, ScaleFont as _};
+use ab_glyph::{self as ab, Font as _, ScaleFont};
 use image::{GenericImageView as _, Rgba, RgbaImage};
 use imageproc::drawing::Canvas as _;
 use resvg::{tiny_skia::Pixmap, usvg};
@@ -169,6 +169,8 @@ fn write_in_image<'a>(
     let mut caret = 0;
     let mut colored_glyphs = vec![];
 
+    dbg!(text_slice);
+
     for glyph in shaped_text {
         let gl = ab::GlyphId(glyph.codepoint as u16).with_scale_and_position(
             ab_scale,
@@ -177,6 +179,11 @@ fn write_in_image<'a>(
                 ascent - (glyph.y_offset as f32 * scale_factor.vertical),
             ),
         );
+
+        {
+            // not working
+            _ = dbg!(ab_font.outline(gl.id));
+        }
 
         caret += glyph.x_advance;
         let Some(outlined_glyph) = ab_font.outline_glyph(gl) else {
@@ -188,6 +195,7 @@ fn write_in_image<'a>(
         let bbx = (bb.min.x as i32).saturating_add_unsigned(margin + centered_line_offset);
         let bby =
             (bb.min.y as i32).saturating_add_unsigned(margin + line_number as u32 * line_height);
+
         if let Some(colored_glyph) = ab_font
             .glyph_svg_image(ab::GlyphId(glyph.codepoint as u16))
             .and_then(|svg| svg_data_to_glyph(svg.data, bb, glyph.codepoint))
