@@ -21,7 +21,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .variations
         .into_iter()
         .flatten()
-        .map(|v| nun::Variation::new_axis(tag(v.name), v.min, v.max, v.rest))
+        .filter_map(|v| {
+            let name = v.name.as_bytes().try_into().ok()?;
+            Some(nun::Variation::new_axis(name, v.min, v.max, v.rest))
+        })
         .collect::<Vec<_>>();
 
     if variations.is_empty() {
@@ -33,7 +36,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .features
         .into_iter()
         .flatten()
-        .map(tag)
         .collect::<Vec<_>>();
 
     nun::run(
@@ -43,9 +45,4 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         variations,
         img_config,
     )
-}
-
-fn tag(tag: String) -> [u8; 4] {
-    assert!(tag.len() == 4, "Tag length must be 4 bytes");
-    tag.as_bytes().try_into().unwrap()
 }

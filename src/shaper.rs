@@ -1,8 +1,8 @@
 #![allow(dead_code)]
 #![allow(unused)]
 
+use std::str::FromStr;
 use rustybuzz::{ttf_parser::Tag, Feature};
-
 use crate::{logic::VariationKind, Variation};
 
 pub(crate) struct GlyphData {
@@ -26,11 +26,11 @@ pub(crate) struct RustBuzz<'f>(rustybuzz::Face<'f>, Vec<Feature>);
 impl<'f> RustBuzz<'f> {
     pub fn new(
         font_data: &'f [u8],
-        features: &[[u8; 4]],
+        features: &[String],
     ) -> Self {
         let features = features
             .iter()
-            .map(|f| Feature::new(Tag::from_bytes(f), 0, ..))
+            .filter_map(|f| Feature::from_str(f).ok())
             .collect();
         Self(rustybuzz::Face::from_slice(font_data, 0).unwrap(), features)
     }

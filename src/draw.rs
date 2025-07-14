@@ -21,7 +21,7 @@ pub struct ImageConfig {
 pub fn run(
     text_path: impl AsRef<Path>,
     font_path: impl AsRef<Path>,
-    features: &[[u8; 4]],
+    features: &[String],
     variations: Vec<Variation>,
     config @ ImageConfig {
         margin,
